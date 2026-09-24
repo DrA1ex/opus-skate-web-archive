@@ -2077,14 +2077,6 @@ static void buildOuterSpots() {
     hydrant(12.6f, 137, SH, false);
     tree(-12.2f, 101, SH, 0.8f);
     tree(12.7f, 115, SH, 0.8f);
-    pigeonSpots.push_back(V3(-12, SH, 92));
-    pigeonSpots.push_back(V3(102, SH, -10));
-    pigeonSpots.push_back(V3(-108, SH, 10));
-
-    npcPaths.push_back({{V3(-12.8f, SH, 74), V3(-12.8f, SH, 146)}, false});
-    npcPaths.push_back({{V3(12.8f, SH, 146), V3(12.8f, SH, 74)}, false});
-    npcPaths.push_back({{V3(74, SH, -10.3f), V3(126, SH, -10.3f)}, false});
-    npcPaths.push_back({{V3(-126, SH, 10.3f), V3(-74, SH, 10.3f)}, false});
 }
 
 static void parkedCars() {
@@ -2948,7 +2940,7 @@ void Player::updateGrind(const Input& in, float dt) {
     combo.addRunning((metal ? 130.f : 110.f) * dt);
     if (std::fabs(bal) >= 1.f) { bail(bal > 0 ? "FELL OFF THE RAIL" : "LOST YOUR BALANCE"); return; }
     if (in.olliePress) {
-        float lateral = (in.right ? 1.f : 0.f) - (in.left ? 1.f : 0.f);
+        float lateral = (in.left ? 1.f : 0.f) - (in.right ? 1.f : 0.f);
         exitGrind(true, lateral);
         ollie(0.55f, true);
         return;
