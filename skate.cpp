@@ -2045,6 +2045,67 @@ static void buildSE() {
 }
 
 
+static void buildNorthPlaza() {
+    // Turn the avenue beyond the old north boundary into a deliberate open skate plaza.
+    // Keep the middle readable and fast, with obstacles grouped into a few distinct lines.
+    float y = 0.008f;
+    overlay(-8.8f, 74, 8.8f, 146, y, hexc(0x8e877c), MAT_PAVERS);
+    for (float z = 82; z < 146; z += 8) {
+        overlay(-8.8f, z, 8.8f, z + 0.16f, y + 0.002f, hexc(0xb0aaa0), MAT_PLAIN);
+    }
+    overlay(-0.12f, 74, 0.12f, 146, y + 0.003f, hexc(0x6f6b65), MAT_PLAIN);
+
+    // Entry ledges frame the old invisible boundary without closing the route.
+    ledge(-5.4f, 82.5f, 0, 0.55f, 3.2f, 0, 0.34f, hexc(0x98938a), MAT_GRANITE);
+    ledge(5.4f, 82.5f, 0, 0.55f, 3.2f, 0, 0.34f, hexc(0x98938a), MAT_GRANITE);
+
+    // Main island: four-stair on the south, grindable deck, bank back to the plaza.
+    float deckTop = 0.44f;
+    Col deck = hexc(0x9e9990), deckTopCol = hexc(0xaaa59d);
+    solidBox(0, 104, 0, 3.8f, 4.5f, 0, deckTop, deck, MAT_GRANITE,
+             SURF_CONCRETE, false, &deckTopCol);
+    edgeRails(0, 104, 0, 3.8f, 4.5f, deckTop, RK_LEDGE, false);
+    stairs(0, 98.6f, 0, 2.4f, 4, 0.11f, 0.45f, 0, deck, MAT_GRANITE, true);
+    kicker(0, 109.7f, PI, 2.4f, 1.2f, deckTop, 0, hexc(0x8b8175), MAT_CONCRETE,
+           SURF_CONCRETE);
+    world.addGap("NORTH PLAZA STAIRS", 450, 0, 98.6f, 0, 2.2f, 1.4f, deckTop + 0.08f);
+
+    // Two longer lines leave a wide lane through the middle of the plaza.
+    ledge(-5.3f, 118.5f, 0, 0.48f, 4.2f, 0, 0.28f, hexc(0xa29c92), MAT_CONCRETE);
+    ledge(5.3f, 125.0f, 0, 0.48f, 4.2f, 0, 0.28f, hexc(0xa29c92), MAT_CONCRETE);
+    handrail(V3(-4.2f, 0.42f, 132), V3(4.2f, 0.42f, 132), true, C_IRON, 1.4f);
+
+    // Small banks make the far end useful without turning it into a dense skatepark.
+    kicker(-5.6f, 138.0f, 0, 1.45f, 1.4f, 0.62f, 0, hexc(0x9d7657), MAT_BRICKBANK,
+           SURF_BRICK);
+    kicker(5.6f, 138.0f, 0, 1.45f, 1.4f, 0.62f, 0, hexc(0x9d7657), MAT_BRICKBANK,
+           SURF_BRICK);
+
+    // Planters and a simple entrance marker give the open area a clear identity.
+    for (int side = -1; side <= 1; side += 2) {
+        float x = side * 6.6f;
+        Col soil = hexc(0x594838);
+        solidBox(x, 94, 0, 1.15f, 1.15f, 0, 0.42f, hexc(0x85817a), MAT_GRANITE,
+                 SURF_CONCRETE, false, &soil);
+        edgeRails(x, 94, 0, 1.15f, 1.15f, 0.42f, RK_LEDGE, false);
+        tree(x, 94, 0.42f, 0.72f);
+
+        solidBox(x, 143, 0, 1.15f, 1.15f, 0, 0.42f, hexc(0x85817a), MAT_GRANITE,
+                 SURF_CONCRETE, false, &soil);
+        edgeRails(x, 143, 0, 1.15f, 1.15f, 0.42f, RK_LEDGE, false);
+        tree(x, 143, 0.42f, 0.72f);
+    }
+
+    Col arch = hexc(0x343b38);
+    SM.limb(V3(-4.2f, 0, 146), V3(-4.2f, 3.6f, 146), 0.12f, 0.12f, V3(1, 0, 0), arch, MAT_METAL);
+    SM.limb(V3(4.2f, 0, 146), V3(4.2f, 3.6f, 146), 0.12f, 0.12f, V3(1, 0, 0), arch, MAT_METAL);
+    SM.limb(V3(-4.2f, 3.6f, 146), V3(4.2f, 3.6f, 146), 0.12f, 0.12f, V3(0, 1, 0), arch, MAT_METAL);
+    world.addBox(-4.2f, 146, 0, 0.14f, 0.14f, 0, 3.6f, SURF_METAL);
+    world.addBox(4.2f, 146, 0, 0.14f, 0.14f, 0, 3.6f, SURF_METAL);
+    signBoard(V3(0, 3.15f, 145.86f), V3(1, 0, 0), V3(0, 1, 0), V3(0, 0, -1),
+              7.2f, 0.62f, "NORTH PLAZA", hexc(0x202422), C_WHITE, false);
+}
+
 static void buildOuterSpots() {
     // The street mesh and building facades already continue well past the original invisible bounds.
     // Populate those corridors so the extra space feels like part of the level instead of empty asphalt.
@@ -2096,8 +2157,8 @@ static void parkedCars() {
         {22, 5.7f, PI / 2, 0, 0}, {36, 5.7f, PI / 2, 1, 1}, {50, 5.7f, PI / 2, 3, 5}, {62, 5.7f, PI / 2, 0, 0},
         {-7.7f, -48, 0, 1, 2}, {-7.7f, -36, 0, 0, 0}, {7.7f, 30, 0, 2, 0}, {7.7f, 46, 0, 1, 4}, {-7.7f, 40, 0, 0, 0},
         {-7.7f, 54, 0, 3, 5}, {7.7f, -20, 0, 1, 1}, {-40, -63.8f, PI / 2, 0, 0}, {-24, -63.8f, PI / 2, 1, 3}, {26, -63.8f, PI / 2, 2, 0}, {46, -63.8f, PI / 2, 0, 0},
-        {7.7f, 96, 0, 0, 0}, {-7.7f, 126, 0, 1, 3}, {92, -5.7f, PI / 2, 2, 0},
-        {112, 5.7f, PI / 2, 1, 4}, {-92, -5.7f, PI / 2, 0, 0}, {-112, 5.7f, PI / 2, 3, 5},
+        {92, -5.7f, PI / 2, 2, 0}, {112, 5.7f, PI / 2, 1, 4},
+        {-92, -5.7f, PI / 2, 0, 0}, {-112, 5.7f, PI / 2, 3, 5},
     };
     for (const P& c : cars) parkedCar(c.x, c.z, c.yaw, c.type, c.type == 0 ? cab : cols[c.col]);
     letterPos.push_back(V3(22, 2.9f, 5.7f));   // 'K' over a parked cab
@@ -2219,6 +2280,7 @@ static void buildLevel() {
     buildCourt();
     buildSW();
     buildSE();
+    buildNorthPlaza();
     buildOuterSpots();
     parkedCars();
     buildPromenade();
