@@ -547,12 +547,11 @@ vec3 applyFog(vec3 col, vec3 p){
   return mix(col, fc, clamp(f, 0.0, 1.0));
 }
 vec3 grade(vec3 c){
-  c = max(c, vec3(0.0));
-  c = c / (1.0 + c * 0.14);                         // gentle highlight shoulder, close to the original look
+  c = c / (1.0 + c*0.18);                           // soft shoulder
   float l = dot(c, vec3(0.299,0.587,0.114));
-  c = mix(vec3(l), c, 1.03);                         // keep the original saturated arcade palette
-  c *= vec3(1.01, 1.0, 0.985);                       // nearly neutral colour balance
-  return pow(clamp(c,0.0,1.0), vec3(0.97));          // lightly lift the midtones
+  c = mix(vec3(l), c, 1.08);                         // a touch of saturation
+  c *= vec3(1.03, 1.0, 0.95);                        // warm late-afternoon film
+  return pow(clamp(c,0.0,1.0), vec3(0.95));
 }
 )";
 
@@ -657,16 +656,13 @@ void main(){
     base = mix(vec3(0.16,0.23,0.30) * (0.85 + 0.3*hash12(id)), vec3(0.55,0.57,0.6), mull);
     if(mull < 0.5){ refl = 0.75; spec = 1.2; shin = 140.0; if(hash12(id*1.7) < 0.05){ base = vec3(0.8,0.78,0.66); emit = 0.35; refl=0.3; } }
   } else if(m == 5){                                        // asphalt
-    // Keep asphalt visually calm: broad tonal variation with only a hint of fine aggregate.
-    float nz = fbm(vPos.xz * 0.72);
-    float grain = vnoise(vPos.xz * 8.0);
-    base *= 0.88 + 0.18*nz;
-    base *= 0.98 + 0.04*grain;
-    float asphaltPatch = smoothstep(0.64, 0.70, fbm(vPos.xz*0.11 + 4.0));
-    base = mix(base, base*0.88, asphaltPatch);
-    float crack = smoothstep(0.005, 0.0, abs(fbm(vPos.xz*0.48+11.0) - 0.5)) * step(0.68, vnoise(vPos.xz*0.3));
-    base *= 1.0 - crack*0.10;
-    spec = 0.015; shin = 18.0;
+    float nz = fbm(vPos.xz * 0.9);
+    base *= 0.78 + 0.35*nz;
+    base *= 0.93 + 0.14*vnoise(vPos.xz*9.0);
+    float asphaltPatch = smoothstep(0.62, 0.66, fbm(vPos.xz*0.12 + 4.0));
+    base = mix(base, base*0.72, asphaltPatch);
+    float crack = smoothstep(0.006, 0.0, abs(fbm(vPos.xz*0.5+11.0) - 0.5)) * step(0.62, vnoise(vPos.xz*0.3));
+    base *= 1.0 - crack*0.25;
   } else if(m == 6){                                        // sidewalk slabs
     vec2 g = vPos.xz / 1.52;
     vec2 gi = floor(g), gf = fract(g);
