@@ -548,11 +548,11 @@ vec3 applyFog(vec3 col, vec3 p){
 }
 vec3 grade(vec3 c){
   c = max(c, vec3(0.0));
-  c = (c * (2.51*c + 0.03)) / (c * (2.43*c + 0.59) + 0.14); // compact filmic shoulder/toe
+  c = c / (1.0 + c * 0.14);                         // gentle highlight shoulder, close to the original look
   float l = dot(c, vec3(0.299,0.587,0.114));
-  c = mix(vec3(l), c, 1.06);                         // preserve the saturated arcade palette
-  c *= vec3(1.025, 1.0, 0.97);                       // subtle late-afternoon warmth
-  return pow(clamp(c,0.0,1.0), vec3(0.98));
+  c = mix(vec3(l), c, 1.03);                         // keep the original saturated arcade palette
+  c *= vec3(1.01, 1.0, 0.985);                       // nearly neutral colour balance
+  return pow(clamp(c,0.0,1.0), vec3(0.97));          // lightly lift the midtones
 }
 )";
 
@@ -660,13 +660,13 @@ void main(){
     // Keep asphalt visually calm: broad tonal variation with only a hint of fine aggregate.
     float nz = fbm(vPos.xz * 0.72);
     float grain = vnoise(vPos.xz * 8.0);
-    base *= 0.86 + 0.22*nz;
-    base *= 0.97 + 0.06*grain;
+    base *= 0.88 + 0.18*nz;
+    base *= 0.98 + 0.04*grain;
     float asphaltPatch = smoothstep(0.64, 0.70, fbm(vPos.xz*0.11 + 4.0));
-    base = mix(base, base*0.84, asphaltPatch);
+    base = mix(base, base*0.88, asphaltPatch);
     float crack = smoothstep(0.005, 0.0, abs(fbm(vPos.xz*0.48+11.0) - 0.5)) * step(0.68, vnoise(vPos.xz*0.3));
-    base *= 1.0 - crack*0.14;
-    spec = 0.018; shin = 18.0;
+    base *= 1.0 - crack*0.10;
+    spec = 0.015; shin = 18.0;
   } else if(m == 6){                                        // sidewalk slabs
     vec2 g = vPos.xz / 1.52;
     vec2 gi = floor(g), gf = fract(g);
@@ -734,28 +734,26 @@ void main(){
   float ndl = dot(n, uSunDir);
   float diff = max((ndl + wrap) / (1.0 + wrap), 0.0);
   float shRaw = ndl > -0.2 ? shadowAt(n) : 0.0;
-  float sh = smoothstep(0.06, 0.94, shRaw);
+  float sh = smoothstep(0.12, 0.90, shRaw);
 
-  // Cast shadows also attenuate the local bounce. This is what gives objects
-  // contact and depth instead of leaving the shadowed side almost as bright.
-  float indirectVis = mix(0.46, 1.0, sh);
-  vec3 hemi = mix(uGroundCol, uSkyTop*0.82 + uSkyHorizon*0.18, n.y*0.5 + 0.5);
-  float ao = horiz ? 1.0 : mix(0.68, 1.0, smoothstep(0.0, 1.6, vPos.y + 0.08));
-  float sideBounce = (1.0 - abs(n.y)) * 0.07;
-  vec3 indirect = hemi * (0.48 + sideBounce) * ao * indirectVis;
-  vec3 col = base * (indirect + uSunCol * diff * sh * 1.08);
+  vec3 hemi = mix(uGroundCol, uSkyTop*0.88 + uSkyHorizon*0.18, n.y*0.5 + 0.5);
+  float ao = horiz ? 1.0 : mix(0.72, 1.0, smoothstep(0.0, 1.45, vPos.y + 0.08));
+  float sideBounce = (1.0 - abs(n.y)) * 0.06;
 
-  // Fresnel-shaped direct highlight: still cheap, but reads much closer to a
-  // modern physically-inspired sun light than an unnormalised Phong sparkle.
+  // Shadows still affect bounce lighting, but keep enough indirect light to preserve detail.
+  float indirectVis = mix(0.74, 1.0, sh);
+  vec3 indirect = hemi * (0.58 + sideBounce) * ao * indirectVis;
+  vec3 col = base * (indirect + uSunCol * diff * sh * 1.02);
+
   vec3 H = normalize(uSunDir + V);
   float noH = max(dot(n, H), 0.0);
   float voH = max(dot(V, H), 0.0);
   float fres = 0.04 + 0.96*pow(1.0 - voH, 5.0);
-  float specNorm = 0.35 + shin*0.012;
-  col += uSunCol * spec * pow(noH, shin) * specNorm * (0.35 + 0.65*fres) * sh * max(ndl, 0.0);
+  float specNorm = 0.22 + shin*0.009;
+  col += uSunCol * spec * pow(noH, shin) * specNorm * (0.25 + 0.45*fres) * sh * max(ndl, 0.0);
 
   float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0);
-  col += base * uSkyHorizon * rim * 0.032 * indirectVis;
+  col += base * uSkyHorizon * rim * 0.018;
   if(refl > 0.0){
     vec3 R = reflect(-V, n);
     float fr = 0.2 + 0.8*pow(1.0 - max(dot(n, V), 0.0), 4.0);
@@ -4440,10 +4438,10 @@ static void drawResults(long long score, long long best, bool newBest, float tim
 // ----------------------------------------------------------------------------
 struct Lighting {
     V3 sunDir = norm(V3(-0.62f, 0.5f, 0.6f));
-    V3 sunCol = V3(1.56f, 1.29f, 0.98f);
-    V3 skyTop = V3(0.28f, 0.46f, 0.76f), skyHorizon = V3(0.82f, 0.76f, 0.68f);
-    V3 groundCol = V3(0.24f, 0.22f, 0.20f), fogCol = V3(0.78f, 0.74f, 0.68f);
-    float fogDensity = 0.0040f;
+    V3 sunCol = V3(1.44f, 1.18f, 0.90f);
+    V3 skyTop = V3(0.30f, 0.48f, 0.76f), skyHorizon = V3(0.86f, 0.79f, 0.70f);
+    V3 groundCol = V3(0.31f, 0.29f, 0.27f), fogCol = V3(0.78f, 0.74f, 0.68f);
+    float fogDensity = 0.0041f;
 };
 static Lighting LIGHT;
 
