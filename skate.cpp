@@ -1231,6 +1231,7 @@ static std::vector<Lamp> lamps;
 static const Col C_ASPHALT = hexc(0x46464a), C_SIDEWALK = hexc(0xa9a59c), C_CURB = hexc(0x8f8b84);
 static const Col C_GRANITE = hexc(0x8d8a86), C_IRON = hexc(0x1e2220), C_STEEL = hexc(0x9aa0a6);
 static const Col C_WOOD = hexc(0x8a6a48), C_PLYWOOD = hexc(0xc49a62), C_YELLOW = hexc(0xf2c318), C_WHITE = hexc(0xeeeeea);
+static const float FACADE_EPS = 0.018f;    // decals / storefront layers in front of building walls
 
 static V3 rotLocal(float rot, float lx, float lz) {   // local (x,z) offset -> world offset
     float c = std::cos(rot), s = std::sin(rot);
@@ -1580,7 +1581,6 @@ static void fireEscape(V3 o, V3 r, V3 n, float w, int floors) {
 static const float SH = 0.15f;   // sidewalk height
 static const float SURFACE_EPS = 0.012f;   // visual layers above coplanar ground surfaces
 static const float SURFACE_STEP = 0.008f;  // spacing between stacked paint / paving layers
-static const float FACADE_EPS = 0.018f;    // decals / storefront layers in front of building walls
 
 static void building(float x0, float z0, float x1, float z1, float h, int style, Col col, uint32_t seed, bool roofStuff = true) {
     uint8_t mat = style == 1 ? MAT_STONEWIN : (style == 2 ? MAT_GLASSWALL : MAT_WINDOWS);
