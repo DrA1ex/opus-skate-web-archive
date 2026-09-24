@@ -2077,6 +2077,14 @@ static void buildOuterSpots() {
     hydrant(12.6f, 137, SH, false);
     tree(-12.2f, 101, SH, 0.8f);
     tree(12.7f, 115, SH, 0.8f);
+    pigeonSpots.push_back(V3(-12, SH, 92));
+    pigeonSpots.push_back(V3(102, SH, -10));
+    pigeonSpots.push_back(V3(-108, SH, 10));
+
+    npcPaths.push_back({{V3(-12.8f, SH, 74), V3(-12.8f, SH, 146)}, false});
+    npcPaths.push_back({{V3(12.8f, SH, 146), V3(12.8f, SH, 74)}, false});
+    npcPaths.push_back({{V3(74, SH, -10.3f), V3(126, SH, -10.3f)}, false});
+    npcPaths.push_back({{V3(-126, SH, 10.3f), V3(-74, SH, 10.3f)}, false});
 }
 
 static void parkedCars() {
@@ -4634,7 +4642,7 @@ struct Camera {
     int mode = 0;
 };
 static Camera cam;
-static void updateCamera(float dt, const Player& pl) {
+static void updateCamera(float dt, const Player& pl, V3 visualPos) {
     V3 hv(pl.vel.x, 0, pl.vel.z);
     float spd = len(hv);
     float targetYaw = cam.yaw;
@@ -4646,7 +4654,7 @@ static void updateCamera(float dt, const Player& pl) {
     if (pl.state == ST_AIR && pl.qpAir) { dist += 2.2f; height -= 0.5f; }
     if (cam.mode == 1) { dist += 4.f; height += 2.6f; }
     if (cam.mode == 2) { dist = 2.4f; height = 0.55f; fov = 96.f; }
-    V3 focus = (pl.state == ST_BAIL ? pl.bodyPos : pl.pos) + V3(0, 1.05f, 0);
+    V3 focus = (pl.state == ST_BAIL ? pl.bodyPos : visualPos) + V3(0, 1.05f, 0);
     V3 f = cam.focus;
     f.x = damp(f.x, focus.x, 16.f, dt);
     f.z = damp(f.z, focus.z, 16.f, dt);
@@ -4992,13 +5000,19 @@ int main(int argc, char** argv) {
         for (auto& b : bubbles) b.t -= frameDt;
         bubbles.erase(std::remove_if(bubbles.begin(), bubbles.end(), [](const Bubble& b) { return b.t <= 0; }), bubbles.end());
 
+        V3 visualPlayerPos = P.pos;
+        if (mode == GM_PLAY && P.state != ST_BAIL && len(P.pos - P.prevPos) < 1.f) {
+            float alpha = (float)(acc / (1.0 / 120.0));
+            visualPlayerPos = lerp3(P.prevPos, P.pos, sat(alpha));
+        }
+
         // ---------------------------------------------------------------- camera
         if (mode == GM_TITLE) {
             cam.pos = V3(4.f * std::sin(time * 0.07f), 17.f + 2.f * std::sin(time * 0.11f), 26.f + 6.f * std::cos(time * 0.05f));
             cam.look = V3(12.f + 6.f * std::sin(time * 0.04f), 2.f, -30.f);
             cam.fov = 60;
         } else if (mode == GM_PLAY || shotMode) {
-            updateCamera(frameDt, P);
+            updateCamera(frameDt, P, visualPlayerPos);
         }
         {   // water ambience from nearby fountains/hydrants
             float w = 0;
@@ -5019,10 +5033,9 @@ int main(int argc, char** argv) {
         V3 camFwd = norm(cam.look - cam.pos);
 
         DM.clear();
-        {   // draw the skater interpolated between physics ticks
+        {
             V3 simPos = P.pos;
-            float alpha = mode == GM_PLAY ? (float)(acc / (1.0 / 120.0)) : 1.f;
-            if (P.state != ST_BAIL && len(P.pos - P.prevPos) < 1.f) P.pos = lerp3(P.prevPos, P.pos, sat(alpha));
+            P.pos = visualPlayerPos;
             drawSkater(DM, P, in);
             P.pos = simPos;
         }
@@ -5033,7 +5046,7 @@ int main(int argc, char** argv) {
         drawLetters(DM, P, time);
         RD.dynMesh.upload(DM, true);
 
-        V3 focus = mode == GM_TITLE ? V3(14, 0, -26) : P.pos;
+        V3 focus = mode == GM_TITLE ? V3(14, 0, -26) : visualPlayerPos;
         M4 lightVP = lightMatrix(focus + camFwd * 25.f);
         // shadow pass
         gl.BindFramebuffer(GL_FRAMEBUFFER, RD.shadowFbo);
