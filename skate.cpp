@@ -623,12 +623,18 @@ void main(){
     float row = floor(b.y);
     b.x += mod(row, 2.0) * 0.5;
     vec2 bi = floor(b), bf = fract(b);
-    vec2 fwb = fwidth(b);
-    float aa = 1.0 - smoothstep(0.18, 0.5, max(fwb.x, fwb.y));   // fade detail out before it aliases
-    float mortar = (bf.y < 0.14 || bf.x < 0.05) ? 1.0 : 0.0;
+    vec2 fwb = max(fwidth(b), vec2(1e-4));
+    float detail = 1.0 - smoothstep(0.18, 0.52, max(fwb.x, fwb.y));
+
+    // Analytic AA for mortar edges. The old binary comparisons shimmered when
+    // individual bricks approached sub-pixel size on mobile.
+    float mortarX = 1.0 - smoothstep(0.05 - fwb.x, 0.05 + fwb.x, bf.x);
+    float mortarY = 1.0 - smoothstep(0.14 - fwb.y, 0.14 + fwb.y, bf.y);
+    float mortar = max(mortarX, mortarY) * detail;
+
     float v = hash12(bi);
-    base *= mix(0.97, 0.82 + 0.3*v, aa);
-    base = mix(base, vec3(0.62,0.6,0.56), mix(0.14, mortar*0.85, aa));
+    base *= mix(0.97, 0.82 + 0.3*v, detail);
+    base = mix(base, vec3(0.62,0.6,0.56), 0.14 + mortar*0.71);
     base *= 0.9 + 0.2*fbm(vPos.xz*0.35 + vPos.y*0.2);
     if(m == 2){
       vec2 id, lc; float w = windowMask(fuv, 2.7, 3.3, 4.8, 1.25, 1.85, 0.75, id, lc);
@@ -696,10 +702,25 @@ void main(){
   } else if(m == 11){                                       // chain-link fence (cutout)
     vec2 q = fuv * 14.0;
     vec2 r = vec2(q.x + q.y, q.x - q.y);
-    vec2 fwq = fwidth(r);
-    if(max(fwq.x, fwq.y) > 0.28){ if(hash12(gl_FragCoord.xy) > 0.33) discard; }   // far away: dithered density
-    else { vec2 f = abs(fract(r) - 0.5); if(min(f.x, f.y) > 0.09) discard; }
-    spec = 0.6; shin = 40.0;
+    vec2 fwq = max(fwidth(r), vec2(1e-4));
+    vec2 cell = abs(fract(r) - 0.5);
+    float wireDist = min(cell.x, cell.y);
+    float fw = max(fwq.x, fwq.y);
+
+    // Stable analytic coverage instead of gl_FragCoord dithering. The previous
+    // screen-space hash changed every time the camera moved and produced shimmer.
+    float halfWidth = 0.085;
+    float coverage = 1.0 - smoothstep(halfWidth - fw*0.55, halfWidth + fw*0.55, wireDist);
+
+    // Once the mesh is too fine to resolve, switch to a stable world-cell pattern
+    // instead of temporal screen-space noise.
+    if(fw > 0.32){
+      vec2 cid = floor(r);
+      if(hash12(cid) > 0.38) discard;
+    } else if(coverage < 0.42) {
+      discard;
+    }
+    spec = 0.45; shin = 36.0;
   } else if(m == 12){                                       // shop window glass
     vec3 R = reflect(-V, n);
     float fr = 0.25 + 0.75*pow(1.0 - max(dot(n, V), 0.0), 3.0);
