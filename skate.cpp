@@ -547,11 +547,12 @@ vec3 applyFog(vec3 col, vec3 p){
   return mix(col, fc, clamp(f, 0.0, 1.0));
 }
 vec3 grade(vec3 c){
-  c = c / (1.0 + c*0.18);                           // soft shoulder
+  c = max(c, vec3(0.0));
+  c = (c * (2.51*c + 0.03)) / (c * (2.43*c + 0.59) + 0.14); // compact filmic shoulder/toe
   float l = dot(c, vec3(0.299,0.587,0.114));
-  c = mix(vec3(l), c, 1.08);                         // a touch of saturation
-  c *= vec3(1.03, 1.0, 0.95);                        // warm late-afternoon film
-  return pow(clamp(c,0.0,1.0), vec3(0.95));
+  c = mix(vec3(l), c, 1.06);                         // preserve the saturated arcade palette
+  c *= vec3(1.025, 1.0, 0.97);                       // subtle late-afternoon warmth
+  return pow(clamp(c,0.0,1.0), vec3(0.98));
 }
 )";
 
@@ -564,11 +565,22 @@ float shadowAt(vec3 n){
   vec3 p = vLight.xyz / vLight.w * 0.5 + 0.5;
   if(p.x<0.0||p.x>1.0||p.y<0.0||p.y>1.0||p.z>1.0) return 1.0;
   float bias = 0.0006 + 0.0016*(1.0 - clamp(dot(n,uSunDir),0.0,1.0));
-  float s = 0.0;
-  for(int x=-1;x<=1;x++) for(int y=-1;y<=1;y++)
-    s += texture(uShadow, vec3(p.xy + vec2(x,y)*uShadowTexel*1.2, p.z - bias));
+  float r = uShadowTexel * 1.45;
+  float s = texture(uShadow, vec3(p.xy, p.z - bias)) * 2.0;
+  s += texture(uShadow, vec3(p.xy + vec2( 0.90,  0.35)*r, p.z - bias));
+  s += texture(uShadow, vec3(p.xy + vec2(-0.35,  0.90)*r, p.z - bias));
+  s += texture(uShadow, vec3(p.xy + vec2(-0.90, -0.35)*r, p.z - bias));
+  s += texture(uShadow, vec3(p.xy + vec2( 0.35, -0.90)*r, p.z - bias));
   float fade = smoothstep(0.42, 0.5, max(abs(p.x-0.5), abs(p.y-0.5)));
-  return mix(s/9.0, 1.0, fade);
+  return mix(s/6.0, 1.0, fade);
+}
+vec3 detailNormal(vec3 n, float h, float strength){
+  vec3 dpdx = dFdx(vPos), dpdy = dFdy(vPos);
+  vec3 r1 = cross(dpdy, n), r2 = cross(n, dpdx);
+  float det = dot(dpdx, r1);
+  float side = det < 0.0 ? -1.0 : 1.0;
+  vec3 grad = side * (dFdx(h)*r1 + dFdy(h)*r2);
+  return normalize(max(abs(det), 1e-5)*n - strength*grad);
 }
 // returns window mask (0 wall, 1 glass, 2 frame); id = unique window id
 float windowMask(vec2 uv, float cellW, float floorH, float y0, float winW, float winH, float sill, out vec2 id, out vec2 local){
@@ -589,6 +601,7 @@ void main(){
   if(!gl_FrontFacing) n = -n;
   vec3 base = vCol;
   float spec = 0.04, shin = 24.0, emit = 0.0, refl = 0.0, wrap = 0.0;
+  float bump = 0.0, bumpAmt = 0.0;
   bool horiz = abs(n.y) > 0.6;
   vec2 fuv = horiz ? vPos.xz : vec2(abs(n.x) > abs(n.z) ? vPos.z : vPos.x, vPos.y);
   vec3 V = normalize(uCamPos - vPos);
@@ -635,22 +648,28 @@ void main(){
     if(mull < 0.5){ refl = 0.75; spec = 1.2; shin = 140.0; if(hash12(id*1.7) < 0.05){ base = vec3(0.8,0.78,0.66); emit = 0.35; refl=0.3; } }
   } else if(m == 5){                                        // asphalt
     float nz = fbm(vPos.xz * 0.9);
+    float grain = vnoise(vPos.xz*9.0);
     base *= 0.78 + 0.35*nz;
-    base *= 0.93 + 0.14*vnoise(vPos.xz*9.0);
+    base *= 0.93 + 0.14*grain;
     float asphaltPatch = smoothstep(0.62, 0.66, fbm(vPos.xz*0.12 + 4.0));
     base = mix(base, base*0.72, asphaltPatch);
     float crack = smoothstep(0.006, 0.0, abs(fbm(vPos.xz*0.5+11.0) - 0.5)) * step(0.62, vnoise(vPos.xz*0.3));
     base *= 1.0 - crack*0.25;
+    bump = grain*0.72 + nz*0.28; bumpAmt = 0.05;
+    spec = 0.025; shin = 20.0;
   } else if(m == 6){                                        // sidewalk slabs
     vec2 g = vPos.xz / 1.52;
     vec2 gi = floor(g), gf = fract(g);
     vec2 fwg = fwidth(g);
     float aa = 1.0 - smoothstep(0.02, 0.06, max(fwg.x, fwg.y));
     float joint = (gf.x < 0.012 || gf.y < 0.012 || gf.x > 0.988 || gf.y > 0.988) ? 1.0 : 0.0;
-    base *= 0.86 + 0.16*hash12(gi) + 0.1*fbm(vPos.xz*2.0);
+    float concrete = fbm(vPos.xz*2.0);
+    base *= 0.86 + 0.16*hash12(gi) + 0.1*concrete;
     base *= 1.0 - joint*0.45*aa;
     vec2 gc = floor(vPos.xz * 3.0);
     if(hash12(gc) > 0.975){ vec2 d = fract(vPos.xz*3.0)-0.5; if(dot(d,d) < 0.06) base *= 0.55; }   // gum
+    bump = concrete; bumpAmt = 0.035;
+    spec = 0.03; shin = 22.0;
   } else if(m == 7){ emit = 1.0; }
   else if(m == 8){                                          // wooden planks (along x)
     float w = vPos.z / 0.22; float pi = floor(w);
@@ -659,6 +678,8 @@ void main(){
     float grain = vnoise(vec2(vPos.x*1.5 + pi*7.0, fract(w)*8.0));
     base *= (0.8 + 0.25*hash12(vec2(pi, floor(vPos.x/3.0 + hash12(vec2(pi,1.0))*3.0)))) * (0.85 + 0.25*grain);
     base *= 1.0 - gap*0.6;
+    bump = grain; bumpAmt = 0.03;
+    spec = 0.05; shin = 28.0;
   } else if(m == 9){ spec = 0.8; shin = 60.0; base *= 0.9 + 0.1*vnoise(fuv*20.0); }
   else if(m == 10){                                         // foliage
     float nz = fbm(vPos.xz*3.0 + vPos.y*2.0);
@@ -698,14 +719,19 @@ void main(){
   else if(m == 20){ spec = 0.7; shin = 80.0; refl = 0.25; }
   else if(m == 22){ base *= 0.75 + 0.35*fbm(vPos.xz*0.8); }
 
+  if(bumpAmt > 0.0) n = detailNormal(n, bump, bumpAmt);
+
   float ndl = dot(n, uSunDir);
   float diff = max((ndl + wrap) / (1.0 + wrap), 0.0);
   float sh = ndl > -0.2 ? shadowAt(n) : 0.0;
   vec3 hemi = mix(uGroundCol, uSkyTop*0.9 + uSkyHorizon*0.2, n.y*0.5 + 0.5);
   float ao = horiz ? 1.0 : mix(0.72, 1.0, smoothstep(0.0, 1.4, vPos.y + 0.1));
-  vec3 col = base * (hemi * 0.62 * ao + uSunCol * diff * sh);
+  float sideBounce = (1.0 - abs(n.y)) * 0.08;
+  vec3 col = base * (hemi * (0.56 + sideBounce) * ao + uSunCol * diff * sh);
   vec3 H = normalize(uSunDir + V);
   col += uSunCol * spec * pow(max(dot(n, H), 0.0), shin) * sh;
+  float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0);
+  col += base * uSkyHorizon * rim * 0.045;
   if(refl > 0.0){
     vec3 R = reflect(-V, n);
     float fr = 0.2 + 0.8*pow(1.0 - max(dot(n, V), 0.0), 4.0);
