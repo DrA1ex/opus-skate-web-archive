@@ -547,11 +547,7 @@ vec3 applyFog(vec3 col, vec3 p){
   return mix(col, fc, clamp(f, 0.0, 1.0));
 }
 vec3 grade(vec3 c){
-  c = c / (1.0 + c*0.18);                           // soft shoulder
-  float l = dot(c, vec3(0.299,0.587,0.114));
-  c = mix(vec3(l), c, 1.08);                         // a touch of saturation
-  c *= vec3(1.03, 1.0, 0.95);                        // warm late-afternoon film
-  return pow(clamp(c,0.0,1.0), vec3(0.95));
+  return clamp(c, 0.0, 1.0);
 }
 )";
 
