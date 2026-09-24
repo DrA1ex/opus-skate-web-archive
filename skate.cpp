@@ -18,6 +18,7 @@
 //     W / Up ............ push (accelerate)          S / Down ...... brake
 //     A D / Left Right .. steer | spin in the air | balance on rails
 //     SPACE ............. ollie (hold to crouch, release to pop: longer = higher)
+//     SPACE + A/D on rail  side-hop off a grind instead of spinning back onto it
 //     J or Z + dir ...... flip tricks (kickflip, heelflip, shove-it, impossible, 360 flip)
 //     K or X + dir ...... grab tricks (hold to keep grabbing -- let go before landing!)
 //     L or C + dir ...... grind / slide when near a rail, ledge, bench or curb
@@ -1042,7 +1043,7 @@ struct World {
     static constexpr float GX0 = -170, GZ0 = -200, CELL = 4;
     static constexpr int GW = 85, GH = 95;
     std::vector<std::vector<int>> grid;
-    float minX = -69.f, maxX = 69.f, minZ = -100.f, maxZ = 69.f;   // playable bounds
+    float minX = -132.f, maxX = 132.f, minZ = -100.f, maxZ = 150.f;   // playable bounds
 
     int addSolid(const Solid& s) {
         solids.push_back(s);
@@ -2083,6 +2084,194 @@ static void buildSE() {
     pigeonSpots.push_back(V3(13, SH, 50));
 }
 
+
+static void cityBench(float x, float z, float yaw, float y0) {
+    Col metal = hexc(0x343b38), wood = hexc(0x77583d);
+    solidBox(x, z, yaw, 1.15f, 0.3f, y0, y0 + 0.44f, metal, MAT_METAL, SURF_METAL, false, &wood);
+    edgeRails(x, z, yaw, 1.15f, 0.3f, y0 + 0.44f, RK_WOOD, false);
+    V3 back = rotLocal(yaw, 0, 0.27f);
+    SM.box(frame(x + back.x, y0 + 0.74f, z + back.z, yaw), V3(1.15f, 0.28f, 0.055f), wood, MAT_WOOD);
+}
+
+static void plazaBollard(float x, float z, float y0) {
+    Col c = hexc(0x353b39);
+    SM.cylinder(frame(x, y0, z, 0), 0.12f, 0.82f, 8, c, MAT_METAL, true, 0.09f);
+    world.addBox(x, z, 0, 0.13f, 0.13f, y0, y0 + 0.84f, SURF_METAL, false);
+}
+
+static void utilityBox(float x, float z, float yaw, float y0, Col col) {
+    Col top = shade(col, 1.12f);
+    solidBox(x, z, yaw, 0.42f, 0.28f, y0, y0 + 0.92f, col, MAT_PAINTED, SURF_METAL, false, &top);
+    V3 out = fwdYaw(yaw);
+    V3 right = rotLocal(yaw, 1, 0);
+    SM.text3D("NYC", V3(x, y0 + 0.54f, z) + out * 0.291f - right * 0.16f,
+              right, V3(0, 1, 0), 0.035f, hexc(0xd8d4c8), MAT_PLAIN);
+}
+
+static void bikeRack(float x, float z, float yaw, float y0) {
+    V3 along = rotLocal(yaw, 1, 0), across = rotLocal(yaw, 0, 1);
+    Col c = hexc(0x4b5350);
+    for (int i = -1; i <= 1; i++) {
+        V3 p = V3(x, y0, z) + along * (i * 0.62f);
+        V3 a = p - across * 0.28f, b = p + across * 0.28f;
+        SM.limb(a, a + V3(0, 0.72f, 0), 0.045f, 0.045f, along, c, MAT_METAL);
+        SM.limb(b, b + V3(0, 0.72f, 0), 0.045f, 0.045f, along, c, MAT_METAL);
+        SM.limb(a + V3(0, 0.72f, 0), b + V3(0, 0.72f, 0), 0.045f, 0.045f,
+                V3(0, 1, 0), c, MAT_METAL);
+    }
+}
+
+static void trashPile(float x, float z, float y0) {
+    Col bag = hexc(0x252827);
+    SM.sphere(mTranslate(V3(x - 0.22f, y0 + 0.24f, z)), V3(0.28f, 0.34f, 0.26f), 7, 4, bag, MAT_PLAIN);
+    SM.sphere(mTranslate(V3(x + 0.18f, y0 + 0.19f, z + 0.12f)), V3(0.23f, 0.27f, 0.22f), 7, 4, shade(bag, 1.12f), MAT_PLAIN);
+    SM.boxAA(V3(x + 0.38f, y0, z - 0.24f), V3(x + 0.78f, y0 + 0.48f, z + 0.24f),
+             hexc(0x806a4c), MAT_WOOD);
+}
+
+static void newspaperBox(float x, float z, float yaw, float y0, Col col) {
+    Col top = shade(col, 0.88f);
+    solidBox(x, z, yaw, 0.25f, 0.3f, y0, y0 + 1.0f, col, MAT_PAINTED, SURF_METAL, false, &top);
+}
+
+static void buildNorthPlaza() {
+    // Start the transition before the old boundary so the extension feels connected to the original block.
+    float y = 0.008f;
+    overlay(-8.8f, 58, 8.8f, 148, y, hexc(0x8e877c), MAT_PAVERS);
+    for (float z = 62; z < 148; z += 8) {
+        overlay(-8.8f, z, 8.8f, z + 0.16f, y + 0.002f, hexc(0xb0aaa0), MAT_PLAIN);
+    }
+    overlay(-0.12f, 58, 0.12f, 148, y + 0.003f, hexc(0x6f6b65), MAT_PLAIN);
+
+    // The entry marker is close enough to be visible from the original play area.
+    Col arch = hexc(0x343b38);
+    float entryZ = 64;
+    SM.limb(V3(-4.2f, 0, entryZ), V3(-4.2f, 3.6f, entryZ), 0.12f, 0.12f, V3(1, 0, 0), arch, MAT_METAL);
+    SM.limb(V3(4.2f, 0, entryZ), V3(4.2f, 3.6f, entryZ), 0.12f, 0.12f, V3(1, 0, 0), arch, MAT_METAL);
+    SM.limb(V3(-4.2f, 3.6f, entryZ), V3(4.2f, 3.6f, entryZ), 0.12f, 0.12f, V3(0, 1, 0), arch, MAT_METAL);
+    world.addBox(-4.2f, entryZ, 0, 0.14f, 0.14f, 0, 3.6f, SURF_METAL);
+    world.addBox(4.2f, entryZ, 0, 0.14f, 0.14f, 0, 3.6f, SURF_METAL);
+    signBoard(V3(0, 3.15f, entryZ - 0.14f), V3(1, 0, 0), V3(0, 1, 0), V3(0, 0, -1),
+              7.2f, 0.62f, "NORTH PLAZA", hexc(0x202422), C_WHITE, false);
+    for (int side = -1; side <= 1; side += 2) {
+        plazaBollard(side * 6.8f, 61.5f, 0);
+        plazaBollard(side * 7.6f, 64.7f, 0);
+    }
+
+    // A first pair of low ledges starts the skate line immediately after the transition.
+    ledge(-5.3f, 70.5f, 0, 0.5f, 2.8f, 0, 0.3f, hexc(0x99948b), MAT_GRANITE);
+    ledge(5.3f, 75.0f, 0, 0.5f, 2.8f, 0, 0.3f, hexc(0x99948b), MAT_GRANITE);
+
+    // Main island: reachable quickly from the original block, with several ways through it.
+    float deckTop = 0.44f;
+    Col deck = hexc(0x9e9990), deckTopCol = hexc(0xaaa59d);
+    solidBox(0, 90.5f, 0, 3.8f, 4.5f, 0, deckTop, deck, MAT_GRANITE,
+             SURF_CONCRETE, false, &deckTopCol);
+    edgeRails(0, 90.5f, 0, 3.8f, 4.5f, deckTop, RK_LEDGE, false);
+    stairs(0, 85.1f, 0, 2.4f, 4, 0.11f, 0.45f, 0, deck, MAT_GRANITE, true);
+    kicker(0, 96.2f, PI, 2.4f, 1.2f, deckTop, 0, hexc(0x8b8175), MAT_CONCRETE,
+           SURF_CONCRETE);
+    world.addGap("NORTH PLAZA STAIRS", 450, 0, 85.1f, 0, 2.2f, 1.4f, deckTop + 0.08f);
+
+    // Mid-plaza lines alternate sides so a run naturally carries the player deeper into the space.
+    ledge(-5.3f, 106.0f, 0, 0.48f, 4.2f, 0, 0.28f, hexc(0xa29c92), MAT_CONCRETE);
+    handrail(V3(3.8f, 0.42f, 109), V3(3.8f, 0.42f, 119), true, C_IRON, 1.4f);
+    ledge(5.3f, 123.5f, 0, 0.48f, 4.2f, 0, 0.28f, hexc(0xa29c92), MAT_CONCRETE);
+    handrail(V3(-4.2f, 0.42f, 131), V3(4.2f, 0.42f, 131), true, C_IRON, 1.4f);
+
+    // Far end stays open, but has a pair of banks and planters as a visual/gameplay destination.
+    kicker(-5.6f, 140.0f, 0, 1.45f, 1.4f, 0.62f, 0, hexc(0x9d7657), MAT_BRICKBANK,
+           SURF_BRICK);
+    kicker(5.6f, 140.0f, 0, 1.45f, 1.4f, 0.62f, 0, hexc(0x9d7657), MAT_BRICKBANK,
+           SURF_BRICK);
+
+    for (int side = -1; side <= 1; side += 2) {
+        float x = side * 6.6f;
+        Col soil = hexc(0x594838);
+        for (float z : {79.5f, 116.0f, 144.0f}) {
+            solidBox(x, z, 0, 1.05f, 1.05f, 0, 0.4f, hexc(0x85817a), MAT_GRANITE,
+                     SURF_CONCRETE, false, &soil);
+            edgeRails(x, z, 0, 1.05f, 1.05f, 0.4f, RK_LEDGE, false);
+            tree(x, z, 0.4f, 0.68f);
+        }
+    }
+
+    // Dense sidewalk dressing ties the plaza back into the surrounding city.
+    cityBench(-11.4f, 67.5f, 0, SH);
+    cityBench(11.4f, 88.0f, PI, SH);
+    cityBench(-11.4f, 111.0f, 0, SH);
+    cityBench(11.4f, 134.0f, PI, SH);
+    bikeRack(11.8f, 72.5f, 0, SH);
+    bikeRack(-11.8f, 126.0f, 0, SH);
+    utilityBox(-12.2f, 83.0f, PI / 2, SH, hexc(0x315a42));
+    utilityBox(12.2f, 108.0f, -PI / 2, SH, hexc(0x4d5960));
+    newspaperBox(-11.7f, 61.0f, 0, SH, hexc(0xb62824));
+    newspaperBox(-11.1f, 61.0f, 0, SH, hexc(0x27589c));
+    newspaperBox(11.8f, 121.0f, 0, SH, hexc(0xd1b52d));
+    trashPile(-13.0f, 74.0f, SH);
+    trashPile(13.3f, 99.0f, SH);
+    trashPile(-13.0f, 137.0f, SH);
+
+    // Break up the long blank east wall and continue the storefront rhythm into the extension.
+    signBoard(V3(15.84f, 2.7f, 79), V3(0, 0, 1), V3(0, 1, 0), V3(-1, 0, 0),
+              5.8f, 0.72f, "COFFEE", hexc(0x6b2a21), hexc(0xf0dcc0), false);
+    signBoard(V3(15.84f, 2.5f, 96), V3(0, 0, 1), V3(0, 1, 0), V3(-1, 0, 0),
+              5.2f, 0.62f, "MARKET", hexc(0x1e5738), C_WHITE, false);
+    signBoard(V3(15.84f, 2.8f, 116), V3(0, 0, 1), V3(0, 1, 0), V3(-1, 0, 0),
+              6.4f, 0.72f, "ARCADE", hexc(0x243b74), hexc(0xffe15a), true);
+    signBoard(V3(15.84f, 2.6f, 137), V3(0, 0, 1), V3(0, 1, 0), V3(-1, 0, 0),
+              5.8f, 0.62f, "DINER", hexc(0xb32727), C_WHITE, false);
+
+    // Small pavement marks and clutter keep the large open floor from reading as a featureless slab.
+    for (float z : {69.f, 88.f, 112.f, 136.f}) {
+        overlay(-7.8f, z, -6.6f, z + 0.08f, y + 0.004f, hexc(0x6e6962), MAT_PLAIN);
+        overlay(6.4f, z + 2.2f, 7.7f, z + 2.28f, y + 0.004f, hexc(0x6e6962), MAT_PLAIN);
+    }
+}
+
+
+static void buildOuterSpots() {
+    // The street mesh and building facades already continue well past the original invisible bounds.
+    // Populate those corridors so the extra space feels like part of the level instead of empty asphalt.
+    ledge(-11.5f, 86, 0, 0.45f, 3.4f, SH, 0.45f, hexc(0xa39e95), MAT_GRANITE);
+    handrail(V3(11.6f, SH + 0.46f, 82), V3(11.6f, SH + 0.46f, 95), true, C_IRON, 1.6f);
+    kicker(12.4f, 104, 0, 1.25f, 1.35f, 0.7f);
+    ledge(-11.5f, 116, 0, 0.42f, 3.8f, SH, 0.35f, hexc(0xb0aba2), MAT_CONCRETE);
+    ledge(11.7f, 128, 0, 0.5f, 2.8f, SH, 0.5f, hexc(0x8f8a82), MAT_GRANITE);
+    quarterPipe(-11.5f, 143, 0, 1.7f, 2.8f, 1.5f, 0.55f);
+
+    ledge(84, -9.6f, 0, 3.4f, 0.42f, SH, 0.45f, hexc(0xa39e95), MAT_GRANITE);
+    handrail(V3(96, SH + 0.48f, 9.6f), V3(109, SH + 0.48f, 9.6f), true, C_IRON, 1.6f);
+    kicker(121, -9.6f, PI / 2, 1.25f, 1.35f, 0.7f);
+
+    ledge(-84, 9.6f, 0, 3.2f, 0.42f, SH, 0.38f, hexc(0x9a968f), MAT_GRANITE);
+    float westTop = stairs(-100, -9.6f, PI / 2, 1.35f, 5, 0.18f, 0.4f, SH,
+                           hexc(0xa39e95), MAT_GRANITE, true);
+    world.addGap("WEST SIDE STAIRS", 350, -100, -9.6f, PI / 2, 1.3f, 1.2f, westTop + 0.05f);
+    kicker(-121, 9.6f, -PI / 2, 1.25f, 1.35f, 0.7f);
+
+    for (float z = 84; z <= 140; z += 28) {
+        streetLamp(-9.7f, z, SH, PI / 2);
+        streetLamp(9.7f, z + 12, SH, -PI / 2);
+    }
+    for (float x = -124; x <= 124; x += 28) {
+        if (std::fabs(x) < 72) continue;
+        streetLamp(x, -7.6f, SH, 0);
+    }
+
+    hydrant(12.6f, 137, SH, false);
+    tree(-12.2f, 101, SH, 0.8f);
+    tree(12.7f, 115, SH, 0.8f);
+    pigeonSpots.push_back(V3(-12, SH, 92));
+    pigeonSpots.push_back(V3(102, SH, -10));
+    pigeonSpots.push_back(V3(-108, SH, 10));
+
+    npcPaths.push_back({{V3(-12.8f, SH, 74), V3(-12.8f, SH, 146)}, false});
+    npcPaths.push_back({{V3(12.8f, SH, 146), V3(12.8f, SH, 74)}, false});
+    npcPaths.push_back({{V3(74, SH, -10.3f), V3(126, SH, -10.3f)}, false});
+    npcPaths.push_back({{V3(-126, SH, 10.3f), V3(-74, SH, 10.3f)}, false});
+}
+
 static void parkedCars() {
     Col cab = hexc(0xf2c318);
     Col cols[] = {hexc(0x1b1b1d), hexc(0x7a1f22), hexc(0x9ca3a8), hexc(0x274a78), hexc(0x2e4a2e), hexc(0xd8d4c8)};
@@ -2092,6 +2281,8 @@ static void parkedCars() {
         {22, 5.7f, PI / 2, 0, 0}, {36, 5.7f, PI / 2, 1, 1}, {50, 5.7f, PI / 2, 3, 5}, {62, 5.7f, PI / 2, 0, 0},
         {-7.7f, -48, 0, 1, 2}, {-7.7f, -36, 0, 0, 0}, {7.7f, 30, 0, 2, 0}, {7.7f, 46, 0, 1, 4}, {-7.7f, 40, 0, 0, 0},
         {-7.7f, 54, 0, 3, 5}, {7.7f, -20, 0, 1, 1}, {-40, -63.8f, PI / 2, 0, 0}, {-24, -63.8f, PI / 2, 1, 3}, {26, -63.8f, PI / 2, 2, 0}, {46, -63.8f, PI / 2, 0, 0},
+        {92, -5.7f, PI / 2, 2, 0}, {112, 5.7f, PI / 2, 1, 4},
+        {-92, -5.7f, PI / 2, 0, 0}, {-112, 5.7f, PI / 2, 3, 5},
     };
     for (const P& c : cars) parkedCar(c.x, c.z, c.yaw, c.type, c.type == 0 ? cab : cols[c.col]);
     letterPos.push_back(V3(22, 2.9f, 5.7f));   // 'K' over a parked cab
@@ -2213,6 +2404,8 @@ static void buildLevel() {
     buildCourt();
     buildSW();
     buildSE();
+    buildNorthPlaza();
+    buildOuterSpots();
     parkedCars();
     buildPromenade();
     buildSkyline();
@@ -2340,6 +2533,7 @@ struct Player {
     // grind
     int rail = -1, railDir = 1, grindIdx = 0, lastRail = -1;
     float railT = 0, railSpeed = 0, grindTime = 0, railCooldown = 0, grindBuffer = 0, grindYaw = 0;
+    float railDismountSpinLock = 0;
     float bal = 0, balV = 0, balSeed = 0;
     bool grindFakie = false;
     // manual
@@ -2461,13 +2655,33 @@ struct Player {
         if (bailT > 1.8f) respawnAfterBail();
     }
     void respawnAfterBail() {
-        V3 p = bodyPos;
+        V3 p = state == ST_BAIL ? bodyPos : pos;
         if (p.z < RIVER_EDGE_Z + 0.8f) { p.z = RIVER_EDGE_Z + 3.0f; p.y = SH + 1.0f; }
-        p.y = world.ground(p.x, p.z, std::max(p.y, 0.f) + 0.5f).h;
+        for (const Pool& pool : world.pools) {
+            float dx = p.x - pool.x, dz = p.z - pool.z;
+            float d2 = dx * dx + dz * dz;
+            if (d2 >= pool.r * pool.r) continue;
+            float d = std::sqrt(d2);
+            V3 out = d > 0.05f ? V3(dx / d, 0, dz / d) : fwdYaw(yaw);
+            p.x = pool.x + out.x * (pool.r + 1.2f);
+            p.z = pool.z + out.z * (pool.r + 1.2f);
+            p.y = SH + 1.0f;
+        }
+        GroundHit g = world.ground(p.x, p.z, std::max(p.y, 0.f) + 0.5f);
+        if (g.surf == SURF_WATER) {
+            p = SPAWN_POS;
+            g = world.ground(p.x, p.z, p.y + 1.0f);
+        }
+        p.y = g.h;
         // never respawn perched on a thin thing: drop to the lowest nearby surface if on a rail blocker
         V3 v(0, 0, 0);
         world.collideWalls(p, v, 0.35f, p.y + STEP_UP, 1.6f);
-        p.y = world.ground(p.x, p.z, p.y + 0.3f).h;
+        g = world.ground(p.x, p.z, p.y + 0.3f);
+        if (g.surf == SURF_WATER) {
+            p = SPAWN_POS;
+            g = world.ground(p.x, p.z, p.y + 1.0f);
+        }
+        p.y = g.h;
         float y = yaw;
         state = ST_RIDE;
         pos = p;
@@ -2476,6 +2690,7 @@ struct Player {
         spinAccum = spinRate = 0;
         flipIdx = grabIdx = -1;
         rail = -1;
+        railDismountSpinLock = 0;
         crouching = false;
         landSquash = 0;
     }
@@ -2727,8 +2942,8 @@ struct Player {
                 if (late) { ollie(sat(crouchT / 0.32f), false); return; }
             }
         }
-        // spins
-        float spinIn = (in.left ? 1.f : 0.f) - (in.right ? 1.f : 0.f);
+        // spins; after a directional rail ollie, give the side-hop a moment before A/D becomes spin input
+        float spinIn = railDismountSpinLock > 0 ? 0.f : (in.left ? 1.f : 0.f) - (in.right ? 1.f : 0.f);
         if (spinIn != 0) spinRate = approach(spinRate, spinIn * SPIN_MAX, SPIN_ACC * dt);
         else spinRate = approach(spinRate, 0, SPIN_ACC * 1.5f * dt);
         yaw += spinRate * dt;
@@ -2799,7 +3014,7 @@ struct Player {
     bool tryGrind(const Input& in);
     void startGrind(int r, float t, int dir, float spd, const Input& in);
     void updateGrind(const Input& in, float dt);
-    void exitGrind(bool popUp);
+    void exitGrind(bool popUp, float lateral = 0.f);
     void update(const Input& in, float dt);
 };
 static Player P;
@@ -2880,12 +3095,17 @@ void Player::startGrind(int ri, float t, int dir, float spd, const Input& in) {
     crouching = false;
 }
 
-void Player::exitGrind(bool popUp) {
+void Player::exitGrind(bool popUp, float lateral) {
     const Rail& r = world.rails[rail];
     lastRail = rail;
     railCooldown = 0.3f;
     V3 md = r.dir * (float)railDir;
-    vel = md * railSpeed;
+    V3 side = cross(V3(0, 1, 0), md);
+    vel = md * railSpeed + side * (lateral * 3.8f);
+    if (lateral != 0) {
+        pos += side * (lateral * 0.14f);
+        railDismountSpinLock = 0.16f;
+    }
     if (!popUp) vel.y += 1.4f;
     yaw = yawOf(V3(md.x, 0, md.z)) + (grindFakie ? PI : 0);
     state = ST_AIR;
@@ -2913,7 +3133,12 @@ void Player::updateGrind(const Input& in, float dt) {
     bal += balV * dt;
     combo.addRunning((metal ? 130.f : 110.f) * dt);
     if (std::fabs(bal) >= 1.f) { bail(bal > 0 ? "FELL OFF THE RAIL" : "LOST YOUR BALANCE"); return; }
-    if (in.olliePress) { exitGrind(true); ollie(0.55f, true); return; }
+    if (in.olliePress) {
+        float lateral = (in.left ? 1.f : 0.f) - (in.right ? 1.f : 0.f);
+        exitGrind(true, lateral);
+        ollie(0.55f, true);
+        return;
+    }
     // sparks off metal
     if (metal) {
         sparkAcc += dt * (20.f + railSpeed * 6.f);
@@ -2954,6 +3179,7 @@ void Player::update(const Input& in, float dt) {
     }
     if (pos.y < -30.f) { respawnAfterBail(); return; }
     railCooldown = std::max(0.f, railCooldown - dt);
+    railDismountSpinLock = std::max(0.f, railDismountSpinLock - dt);
     grindBuffer = std::max(0.f, grindBuffer - dt);
     manualBuffer = std::max(0.f, manualBuffer - dt);
     landSquash = std::max(0.f, landSquash - dt * 2.5f);
@@ -4211,6 +4437,7 @@ static const char* HELP_LINES[] = {
     "S / DOWN .......... BRAKE",
     "A D / LEFT RIGHT .. STEER / SPIN / BALANCE",
     "SPACE ............. OLLIE (HOLD = HIGHER)",
+    "SPACE + A/D ON RAIL  SIDE-HOP OFF THE RAIL",
     "J or Z + DIR ...... FLIP TRICKS",
     "K or X + DIR ...... GRABS (HOLD, LET GO TO LAND)",
     "L or C + DIR ...... GRIND / SLIDE NEAR RAILS",
@@ -4601,7 +4828,7 @@ struct Camera {
     int mode = 0;
 };
 static Camera cam;
-static void updateCamera(float dt, const Player& pl) {
+static void updateCamera(float dt, const Player& pl, V3 visualPos) {
     V3 hv(pl.vel.x, 0, pl.vel.z);
     float spd = len(hv);
     float targetYaw = cam.yaw;
@@ -4613,7 +4840,7 @@ static void updateCamera(float dt, const Player& pl) {
     if (pl.state == ST_AIR && pl.qpAir) { dist += 2.2f; height -= 0.5f; }
     if (cam.mode == 1) { dist += 4.f; height += 2.6f; }
     if (cam.mode == 2) { dist = 2.4f; height = 0.55f; fov = 96.f; }
-    V3 focus = (pl.state == ST_BAIL ? pl.bodyPos : pl.pos) + V3(0, 1.05f, 0);
+    V3 focus = (pl.state == ST_BAIL ? pl.bodyPos : visualPos) + V3(0, 1.05f, 0);
     V3 f = cam.focus;
     f.x = damp(f.x, focus.x, 16.f, dt);
     f.z = damp(f.z, focus.z, 16.f, dt);
@@ -4959,13 +5186,19 @@ int main(int argc, char** argv) {
         for (auto& b : bubbles) b.t -= frameDt;
         bubbles.erase(std::remove_if(bubbles.begin(), bubbles.end(), [](const Bubble& b) { return b.t <= 0; }), bubbles.end());
 
+        V3 visualPlayerPos = P.pos;
+        if (mode == GM_PLAY && P.state != ST_BAIL && len(P.pos - P.prevPos) < 1.f) {
+            float alpha = (float)(acc / (1.0 / 120.0));
+            visualPlayerPos = lerp3(P.prevPos, P.pos, sat(alpha));
+        }
+
         // ---------------------------------------------------------------- camera
         if (mode == GM_TITLE) {
             cam.pos = V3(4.f * std::sin(time * 0.07f), 17.f + 2.f * std::sin(time * 0.11f), 26.f + 6.f * std::cos(time * 0.05f));
             cam.look = V3(12.f + 6.f * std::sin(time * 0.04f), 2.f, -30.f);
             cam.fov = 60;
         } else if (mode == GM_PLAY || shotMode) {
-            updateCamera(frameDt, P);
+            updateCamera(frameDt, P, visualPlayerPos);
         }
         {   // water ambience from nearby fountains/hydrants
             float w = 0;
@@ -4986,10 +5219,9 @@ int main(int argc, char** argv) {
         V3 camFwd = norm(cam.look - cam.pos);
 
         DM.clear();
-        {   // draw the skater interpolated between physics ticks
+        {
             V3 simPos = P.pos;
-            float alpha = mode == GM_PLAY ? (float)(acc / (1.0 / 120.0)) : 1.f;
-            if (P.state != ST_BAIL && len(P.pos - P.prevPos) < 1.f) P.pos = lerp3(P.prevPos, P.pos, sat(alpha));
+            P.pos = visualPlayerPos;
             drawSkater(DM, P, in);
             P.pos = simPos;
         }
@@ -5000,7 +5232,7 @@ int main(int argc, char** argv) {
         drawLetters(DM, P, time);
         RD.dynMesh.upload(DM, true);
 
-        V3 focus = mode == GM_TITLE ? V3(14, 0, -26) : P.pos;
+        V3 focus = mode == GM_TITLE ? V3(14, 0, -26) : visualPlayerPos;
         M4 lightVP = lightMatrix(focus + camFwd * 20.f);
         // shadow pass
         gl.BindFramebuffer(GL_FRAMEBUFFER, RD.shadowFbo);
