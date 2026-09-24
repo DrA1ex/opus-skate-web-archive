@@ -561,9 +561,11 @@ float shadowAt(vec3 n){
   vec3 p = vLight.xyz / vLight.w * 0.5 + 0.5;
   if(p.x<0.0||p.x>1.0||p.y<0.0||p.y>1.0||p.z>1.0) return 1.0;
 
-  // Keep contact shadows attached, then widen the kernel gradually in the distance.
+  // Use a slope-aware receiver bias. Large flat facades otherwise self-shadow
+  // at grazing sun angles and look like geometry z-fighting.
   float ndl = clamp(dot(n,uSunDir), 0.0, 1.0);
-  float bias = 0.00032 + 0.0009*(1.0 - ndl);
+  float slope = sqrt(max(1.0 - ndl*ndl, 0.0)) / max(ndl, 0.22);
+  float bias = 0.00038 + min(0.00135, slope * 0.00024);
   float dist = length(vPos - uCamPos);
   float r = uShadowTexel * mix(1.15, 2.15, smoothstep(18.0, 85.0, dist));
 
@@ -1493,7 +1495,7 @@ static void signBoard(V3 pos, V3 right, V3 up, V3 out, float w, float h, const s
     SM.box(F, V3(w * 0.5f, h * 0.5f, 0.06f), bg, MAT_PAINTED);
     float px = std::min(h * 0.62f / 7.f, (w * 0.9f) / (txt.size() * 6.f));
     float tw = textWidth3D(txt, px);
-    V3 o = c - right * (tw * 0.5f) - up * (3.5f * px) + out * 0.065f;
+    V3 o = c - right * (tw * 0.5f) - up * (3.5f * px) + out * (0.06f + FACADE_EPS);
     SM.text3D(txt, o, right, up, px, fg, neon ? MAT_EMISSIVE : MAT_PLAIN);
 }
 
@@ -1525,7 +1527,7 @@ static void storefront(V3 o, V3 r, V3 n, float w, const std::string& name, Col s
     // neon "OPEN" in the window sometimes
     if (rng.chance(0.55f)) {
         float px = 0.045f;
-        V3 no = o + r * (doorX < w * 0.5f ? w - 2.2f : 1.0f) + up * 2.4f + n * 0.05f;
+        V3 no = o + r * (doorX < w * 0.5f ? w - 2.2f : 1.0f) + up * 2.4f + n * (0.03f + FACADE_EPS);
         SM.text3D("OPEN", no, r, up, px, rng.chance(0.5f) ? hexc(0xff3060) : hexc(0x40c0ff), MAT_EMISSIVE);
     }
     if (hasAwning) {
@@ -1578,6 +1580,7 @@ static void fireEscape(V3 o, V3 r, V3 n, float w, int floors) {
 static const float SH = 0.15f;   // sidewalk height
 static const float SURFACE_EPS = 0.012f;   // visual layers above coplanar ground surfaces
 static const float SURFACE_STEP = 0.008f;  // spacing between stacked paint / paving layers
+static const float FACADE_EPS = 0.018f;    // decals / storefront layers in front of building walls
 
 static void building(float x0, float z0, float x1, float z1, float h, int style, Col col, uint32_t seed, bool roofStuff = true) {
     uint8_t mat = style == 1 ? MAT_STONEWIN : (style == 2 ? MAT_GLASSWALL : MAT_WINDOWS);
@@ -1633,10 +1636,11 @@ static void facadeRow(V3 left, V3 out, float length, float depth, uint32_t seed,
         building(mn.x, mn.z, mx.x, mx.z, h, style, col, rng.next());
         if (shops) {
             int k = rng.irange(0, 7);
-            storefront(p0 + out * 0.001f, r, out, w, SHOP_NAMES[shopIdx++ % 28], hexc(signBg[k]), hexc(signFg[k]),
+            storefront(p0 + out * FACADE_EPS, r, out, w, SHOP_NAMES[shopIdx++ % 28], hexc(signBg[k]), hexc(signFg[k]),
                        hexc(awn[rng.irange(0, 5)]), rng.chance(0.6f), rng);
         }
-        if (style == 0 && h > 12 && rng.chance(0.5f)) fireEscape(p0 + r * (w * 0.2f) + out * 0.01f, r, out, w * 0.6f, (int)((h - 5.f) / 3.3f));
+        if (style == 0 && h > 12 && rng.chance(0.5f))
+            fireEscape(p0 + r * (w * 0.2f) + out * FACADE_EPS, r, out, w * 0.6f, (int)((h - 5.f) / 3.3f));
         x += w;
     }
 }
@@ -5246,7 +5250,7 @@ int main(int argc, char** argv) {
         glDisable(GL_BLEND);
         glDisable(GL_CULL_FACE);
         glEnable(GL_POLYGON_OFFSET_FILL);
-        glPolygonOffset(0.9f, 1.5f);
+        glPolygonOffset(1.1f, 2.0f);
         gl.UseProgram(RD.pShadow);
         setMat(RD.pShadow, "uLightVP", lightVP);
         RD.staticMesh.draw();
