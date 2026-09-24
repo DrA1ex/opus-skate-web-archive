@@ -1576,6 +1576,8 @@ static void fireEscape(V3 o, V3 r, V3 n, float w, int floors) {
 //   Water St z in [-74,-62]; promenade z in [-88,-74]; river beyond.
 // ----------------------------------------------------------------------------
 static const float SH = 0.15f;   // sidewalk height
+static const float SURFACE_EPS = 0.012f;   // visual layers above coplanar ground surfaces
+static const float SURFACE_STEP = 0.008f;  // spacing between stacked paint / paving layers
 
 static void building(float x0, float z0, float x1, float z1, float h, int style, Col col, uint32_t seed, bool roofStuff = true) {
     uint8_t mat = style == 1 ? MAT_STONEWIN : (style == 2 ? MAT_GLASSWALL : MAT_WINDOWS);
@@ -1655,7 +1657,7 @@ static void buildStreets() {
     slab(-600, RIVER_EDGE_Z, 600, -74, SH, C_SIDEWALK, MAT_SIDEWALK, SURF_SIDEWALK, 8);
     // road markings
     Col white = hexc(0xdedbd2), yel = hexc(0xe0b416);
-    float y = 0.006f;
+    float y = SURFACE_EPS;
     for (float z = -60; z < 200; z += 6) {
         if (z > -12 && z < 12) continue;
         stripeQuad(V3(-2.3f, y, z), V3(0, 0, 1), V3(1, 0, 0), 3, 0.14f, white);
@@ -1680,10 +1682,10 @@ static void buildStreets() {
     for (float x = -8.5f; x < 8.5f; x += 1.1f) stripeQuad(V3(x, y, -61.0f), V3(0, 0, 1), V3(1, 0, 0), 3.0f, 0.55f, white);
     // manholes, steam, puddles
     manhole(-3.5f, -30, true); manhole(4, 36, true); manhole(-30, 1.5f, false); manhole(38, -2, true); manhole(-3, -69, false);
-    puddle(-8.2f, 20, 0.012f, 1.6f, 3.2f);
-    puddle(5, -45, 0.012f, 2.2f, 1.4f);
-    puddle(26, 5.5f, 0.012f, 2.6f, 1.1f);
-    puddle(-45, -66, 0.012f, 1.8f, 2.8f);
+    puddle(-8.2f, 20, SURFACE_EPS + 0.006f, 1.6f, 3.2f);
+    puddle(5, -45, SURFACE_EPS + 0.006f, 2.2f, 1.4f);
+    puddle(26, 5.5f, SURFACE_EPS + 0.006f, 2.6f, 1.1f);
+    puddle(-45, -66, SURFACE_EPS + 0.006f, 1.8f, 2.8f);
     // traffic lights at the corners
     float tl[4][2] = {{-10.2f, -8.2f}, {10.2f, -8.2f}, {-10.2f, 8.2f}, {10.2f, 8.2f}};
     for (int i = 0; i < 4; i++) {
@@ -1794,7 +1796,7 @@ static void buildFountain(float cx, float cz) {
 
 static void buildPlaza() {
     // pavers + glass office tower on the east with a raised terrace, stairs and brick banks
-    overlay(14, -57, 58, -12, SH + 0.003f, hexc(0x9a5b47), MAT_PAVERS);
+    overlay(14, -57, 58, -12, SH + SURFACE_EPS, hexc(0x9a5b47), MAT_PAVERS);
     building(58, -57, 200, -12, 96, 2, hexc(0x8899aa), 21);
     float tTop = SH + 1.05f;
     Col gran = hexc(0x9a968f), gtop = hexc(0xa8a49c);
@@ -1895,11 +1897,13 @@ static void hoop(float x, float z, float faceYaw) {
 
 static void buildCourt() {
     float x0 = -48, x1 = -18, z0 = 16, z1 = 46;
-    overlay(x0, z0, x1, z1, SH + 0.003f, hexc(0x3c6b4c), MAT_COURT);
-    overlay(x0 + 1.5f, z0 + 1.5f, x1 - 1.5f, z1 - 1.5f, SH + 0.005f, hexc(0x9a4a3a), MAT_COURT);
+    float courtBase = SH + SURFACE_EPS;
+    overlay(x0, z0, x1, z1, courtBase, hexc(0x3c6b4c), MAT_COURT);
+    overlay(x0 + 1.5f, z0 + 1.5f, x1 - 1.5f, z1 - 1.5f, courtBase + SURFACE_STEP,
+            hexc(0x9a4a3a), MAT_COURT);
     Col line = hexc(0xeeeeea);
     auto L = [&](float ax, float az, float bx, float bz) {
-        V3 a(ax, SH + 0.008f, az), b(bx, SH + 0.008f, bz);
+        V3 a(ax, courtBase + SURFACE_STEP * 2, az), b(bx, courtBase + SURFACE_STEP * 2, bz);
         V3 d = norm(b - a), n = cross(V3(0, 1, 0), d) * 0.05f;
         SM.quadOut(a - n, b - n, b + n, a + n, V3(0, 1, 0), line, MAT_PLAIN);
     };
@@ -2045,7 +2049,7 @@ static void buildSE() {
         }
     }
     SM.boxAA(V3(30.5f, SH + 3.3f, 7.5f), V3(69.5f, SH + 3.75f, 12.3f), hexc(0x3b5f3a), MAT_PAINTED);
-    overlay(30, 12.45f, 69.5f, 45, SH + 0.003f, hexc(0x8d8272), MAT_CONCRETE);
+    overlay(30, 12.45f, 69.5f, 45, SH + SURFACE_EPS, hexc(0x8d8272), MAT_CONCRETE);
     {   // dumpster with a plywood kicker leaning on it
         Col dc = hexc(0x2f6b3f), dt = hexc(0x3d7a4d);
         solidBox(38, 25, 0, 1.0f, 2.0f, SH, SH + 1.3f, dc, MAT_PAINTED, SURF_METAL, false, &dt);
@@ -2136,12 +2140,12 @@ static void newspaperBox(float x, float z, float yaw, float y0, Col col) {
 
 static void buildNorthPlaza() {
     // Start the transition before the old boundary so the extension feels connected to the original block.
-    float y = 0.008f;
+    float y = SURFACE_EPS;
     overlay(-8.8f, 58, 8.8f, 148, y, hexc(0x8e877c), MAT_PAVERS);
     for (float z = 62; z < 148; z += 8) {
-        overlay(-8.8f, z, 8.8f, z + 0.16f, y + 0.002f, hexc(0xb0aaa0), MAT_PLAIN);
+        overlay(-8.8f, z, 8.8f, z + 0.16f, y + SURFACE_STEP, hexc(0xb0aaa0), MAT_PLAIN);
     }
-    overlay(-0.12f, 58, 0.12f, 148, y + 0.003f, hexc(0x6f6b65), MAT_PLAIN);
+    overlay(-0.12f, 58, 0.12f, 148, y + SURFACE_STEP * 2, hexc(0x6f6b65), MAT_PLAIN);
 
     // The entry marker is close enough to be visible from the original play area.
     Col arch = hexc(0x343b38);
@@ -2224,8 +2228,8 @@ static void buildNorthPlaza() {
 
     // Small pavement marks and clutter keep the large open floor from reading as a featureless slab.
     for (float z : {69.f, 88.f, 112.f, 136.f}) {
-        overlay(-7.8f, z, -6.6f, z + 0.08f, y + 0.004f, hexc(0x6e6962), MAT_PLAIN);
-        overlay(6.4f, z + 2.2f, 7.7f, z + 2.28f, y + 0.004f, hexc(0x6e6962), MAT_PLAIN);
+        overlay(-7.8f, z, -6.6f, z + 0.08f, y + SURFACE_STEP * 3, hexc(0x6e6962), MAT_PLAIN);
+        overlay(6.4f, z + 2.2f, 7.7f, z + 2.28f, y + SURFACE_STEP * 3, hexc(0x6e6962), MAT_PLAIN);
     }
 }
 
@@ -2290,7 +2294,7 @@ static void parkedCars() {
 
 static void buildPromenade() {
     float top = SH;
-    overlay(-600, -86.6f, 600, -76.4f, top + 0.003f, hexc(0x8b6d4e), MAT_WOOD);
+    overlay(-600, -86.6f, 600, -76.4f, top + SURFACE_EPS, hexc(0x8b6d4e), MAT_WOOD);
     world.addBox(0, -81.5f, 0, 600, 5.1f, -0.3f, top, SURF_WOOD);
     // seawall + granite coping + railing
     SM.quadOut(V3(-600, top, RIVER_EDGE_Z), V3(600, top, RIVER_EDGE_Z), V3(600, WATER_LEVEL - 3, RIVER_EDGE_Z), V3(-600, WATER_LEVEL - 3, RIVER_EDGE_Z),
@@ -5213,7 +5217,7 @@ int main(int argc, char** argv) {
         SDL_GL_GetDrawableSize(win, &W, &H);
         resizeReflection(W, H);
         float aspect = (float)W / std::max(1, H);
-        M4 proj = mPerspective(cam.fov * PI / 180.f, aspect, 0.1f, 1500.f);
+        M4 proj = mPerspective(cam.fov * PI / 180.f, aspect, 0.2f, 1500.f);
         M4 view = mLookAt(cam.pos, cam.look, V3(0, 1, 0));
         M4 vp = proj * view;
         V3 camFwd = norm(cam.look - cam.pos);
