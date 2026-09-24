@@ -561,11 +561,15 @@ float shadowAt(vec3 n){
   vec3 p = vLight.xyz / vLight.w * 0.5 + 0.5;
   if(p.x<0.0||p.x>1.0||p.y<0.0||p.y>1.0||p.z>1.0) return 1.0;
 
-  // Use a slope-aware receiver bias. Large flat facades otherwise self-shadow
-  // at grazing sun angles and look like geometry z-fighting.
+  // Keep a small receiver bias on horizontal surfaces for tight contact shadows,
+  // but use a larger bias on facades. Vertical walls are much more sensitive to
+  // shadow-map precision at grazing sun angles and otherwise develop acne.
   float ndl = clamp(dot(n,uSunDir), 0.0, 1.0);
+  float vertical = 1.0 - smoothstep(0.25, 0.85, abs(n.y));
   float slope = sqrt(max(1.0 - ndl*ndl, 0.0)) / max(ndl, 0.22);
-  float bias = 0.00038 + min(0.00135, slope * 0.00024);
+  float baseBias = mix(0.00036, 0.00092, vertical);
+  float slopeScale = mix(0.00018, 0.00034, vertical);
+  float bias = baseBias + min(mix(0.00095, 0.00145, vertical), slope * slopeScale);
   float dist = length(vPos - uCamPos);
   float r = uShadowTexel * mix(1.15, 2.15, smoothstep(18.0, 85.0, dist));
 
