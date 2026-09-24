@@ -75,6 +75,9 @@ jobs:
       cancel-in-progress: false
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Download web build
         uses: actions/download-artifact@v5
         with:
@@ -109,6 +112,9 @@ jobs:
       cancel-in-progress: false
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Download web build
         uses: actions/download-artifact@v5
         with:
