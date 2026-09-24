@@ -564,15 +564,25 @@ out vec4 fragColor;
 float shadowAt(vec3 n){
   vec3 p = vLight.xyz / vLight.w * 0.5 + 0.5;
   if(p.x<0.0||p.x>1.0||p.y<0.0||p.y>1.0||p.z>1.0) return 1.0;
-  float bias = 0.0006 + 0.0016*(1.0 - clamp(dot(n,uSunDir),0.0,1.0));
-  float r = uShadowTexel * 1.45;
+
+  // Keep contact shadows attached, then widen the kernel gradually in the distance.
+  float ndl = clamp(dot(n,uSunDir), 0.0, 1.0);
+  float bias = 0.00032 + 0.0009*(1.0 - ndl);
+  float dist = length(vPos - uCamPos);
+  float r = uShadowTexel * mix(1.15, 2.15, smoothstep(18.0, 85.0, dist));
+
   float s = texture(uShadow, vec3(p.xy, p.z - bias)) * 2.0;
-  s += texture(uShadow, vec3(p.xy + vec2( 0.90,  0.35)*r, p.z - bias));
-  s += texture(uShadow, vec3(p.xy + vec2(-0.35,  0.90)*r, p.z - bias));
-  s += texture(uShadow, vec3(p.xy + vec2(-0.90, -0.35)*r, p.z - bias));
-  s += texture(uShadow, vec3(p.xy + vec2( 0.35, -0.90)*r, p.z - bias));
-  float fade = smoothstep(0.42, 0.5, max(abs(p.x-0.5), abs(p.y-0.5)));
-  return mix(s/6.0, 1.0, fade);
+  s += texture(uShadow, vec3(p.xy + vec2( 0.35,  0.95)*r, p.z - bias));
+  s += texture(uShadow, vec3(p.xy + vec2(-0.55,  0.80)*r, p.z - bias));
+  s += texture(uShadow, vec3(p.xy + vec2(-0.95,  0.20)*r, p.z - bias));
+  s += texture(uShadow, vec3(p.xy + vec2(-0.70, -0.70)*r, p.z - bias));
+  s += texture(uShadow, vec3(p.xy + vec2( 0.15, -0.98)*r, p.z - bias));
+  s += texture(uShadow, vec3(p.xy + vec2( 0.80, -0.55)*r, p.z - bias));
+  s += texture(uShadow, vec3(p.xy + vec2( 0.98,  0.18)*r, p.z - bias));
+  s += texture(uShadow, vec3(p.xy + vec2( 0.65,  0.65)*r, p.z - bias));
+
+  float fade = smoothstep(0.43, 0.5, max(abs(p.x-0.5), abs(p.y-0.5)));
+  return mix(s/10.0, 1.0, fade);
 }
 vec3 detailNormal(vec3 n, float h, float strength){
   vec3 dpdx = dFdx(vPos), dpdy = dFdy(vPos);
@@ -647,16 +657,16 @@ void main(){
     base = mix(vec3(0.16,0.23,0.30) * (0.85 + 0.3*hash12(id)), vec3(0.55,0.57,0.6), mull);
     if(mull < 0.5){ refl = 0.75; spec = 1.2; shin = 140.0; if(hash12(id*1.7) < 0.05){ base = vec3(0.8,0.78,0.66); emit = 0.35; refl=0.3; } }
   } else if(m == 5){                                        // asphalt
-    float nz = fbm(vPos.xz * 0.9);
-    float grain = vnoise(vPos.xz*9.0);
-    base *= 0.78 + 0.35*nz;
-    base *= 0.93 + 0.14*grain;
-    float asphaltPatch = smoothstep(0.62, 0.66, fbm(vPos.xz*0.12 + 4.0));
-    base = mix(base, base*0.72, asphaltPatch);
-    float crack = smoothstep(0.006, 0.0, abs(fbm(vPos.xz*0.5+11.0) - 0.5)) * step(0.62, vnoise(vPos.xz*0.3));
-    base *= 1.0 - crack*0.25;
-    bump = grain*0.72 + nz*0.28; bumpAmt = 0.05;
-    spec = 0.025; shin = 20.0;
+    // Keep asphalt visually calm: broad tonal variation with only a hint of fine aggregate.
+    float nz = fbm(vPos.xz * 0.72);
+    float grain = vnoise(vPos.xz * 8.0);
+    base *= 0.86 + 0.22*nz;
+    base *= 0.97 + 0.06*grain;
+    float asphaltPatch = smoothstep(0.64, 0.70, fbm(vPos.xz*0.11 + 4.0));
+    base = mix(base, base*0.84, asphaltPatch);
+    float crack = smoothstep(0.005, 0.0, abs(fbm(vPos.xz*0.48+11.0) - 0.5)) * step(0.68, vnoise(vPos.xz*0.3));
+    base *= 1.0 - crack*0.14;
+    spec = 0.018; shin = 18.0;
   } else if(m == 6){                                        // sidewalk slabs
     vec2 g = vPos.xz / 1.52;
     vec2 gi = floor(g), gf = fract(g);
@@ -668,7 +678,7 @@ void main(){
     base *= 1.0 - joint*0.45*aa;
     vec2 gc = floor(vPos.xz * 3.0);
     if(hash12(gc) > 0.975){ vec2 d = fract(vPos.xz*3.0)-0.5; if(dot(d,d) < 0.06) base *= 0.55; }   // gum
-    bump = concrete; bumpAmt = 0.035;
+    bump = concrete; bumpAmt = 0.016;
     spec = 0.03; shin = 22.0;
   } else if(m == 7){ emit = 1.0; }
   else if(m == 8){                                          // wooden planks (along x)
@@ -678,7 +688,7 @@ void main(){
     float grain = vnoise(vec2(vPos.x*1.5 + pi*7.0, fract(w)*8.0));
     base *= (0.8 + 0.25*hash12(vec2(pi, floor(vPos.x/3.0 + hash12(vec2(pi,1.0))*3.0)))) * (0.85 + 0.25*grain);
     base *= 1.0 - gap*0.6;
-    bump = grain; bumpAmt = 0.03;
+    bump = grain; bumpAmt = 0.018;
     spec = 0.05; shin = 28.0;
   } else if(m == 9){ spec = 0.8; shin = 60.0; base *= 0.9 + 0.1*vnoise(fuv*20.0); }
   else if(m == 10){                                         // foliage
@@ -723,15 +733,29 @@ void main(){
 
   float ndl = dot(n, uSunDir);
   float diff = max((ndl + wrap) / (1.0 + wrap), 0.0);
-  float sh = ndl > -0.2 ? shadowAt(n) : 0.0;
-  vec3 hemi = mix(uGroundCol, uSkyTop*0.9 + uSkyHorizon*0.2, n.y*0.5 + 0.5);
-  float ao = horiz ? 1.0 : mix(0.72, 1.0, smoothstep(0.0, 1.4, vPos.y + 0.1));
-  float sideBounce = (1.0 - abs(n.y)) * 0.08;
-  vec3 col = base * (hemi * (0.56 + sideBounce) * ao + uSunCol * diff * sh);
+  float shRaw = ndl > -0.2 ? shadowAt(n) : 0.0;
+  float sh = smoothstep(0.06, 0.94, shRaw);
+
+  // Cast shadows also attenuate the local bounce. This is what gives objects
+  // contact and depth instead of leaving the shadowed side almost as bright.
+  float indirectVis = mix(0.46, 1.0, sh);
+  vec3 hemi = mix(uGroundCol, uSkyTop*0.82 + uSkyHorizon*0.18, n.y*0.5 + 0.5);
+  float ao = horiz ? 1.0 : mix(0.68, 1.0, smoothstep(0.0, 1.6, vPos.y + 0.08));
+  float sideBounce = (1.0 - abs(n.y)) * 0.07;
+  vec3 indirect = hemi * (0.48 + sideBounce) * ao * indirectVis;
+  vec3 col = base * (indirect + uSunCol * diff * sh * 1.08);
+
+  // Fresnel-shaped direct highlight: still cheap, but reads much closer to a
+  // modern physically-inspired sun light than an unnormalised Phong sparkle.
   vec3 H = normalize(uSunDir + V);
-  col += uSunCol * spec * pow(max(dot(n, H), 0.0), shin) * sh;
+  float noH = max(dot(n, H), 0.0);
+  float voH = max(dot(V, H), 0.0);
+  float fres = 0.04 + 0.96*pow(1.0 - voH, 5.0);
+  float specNorm = 0.35 + shin*0.012;
+  col += uSunCol * spec * pow(noH, shin) * specNorm * (0.35 + 0.65*fres) * sh * max(ndl, 0.0);
+
   float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0);
-  col += base * uSkyHorizon * rim * 0.045;
+  col += base * uSkyHorizon * rim * 0.032 * indirectVis;
   if(refl > 0.0){
     vec3 R = reflect(-V, n);
     float fr = 0.2 + 0.8*pow(1.0 - max(dot(n, V), 0.0), 4.0);
@@ -4416,10 +4440,10 @@ static void drawResults(long long score, long long best, bool newBest, float tim
 // ----------------------------------------------------------------------------
 struct Lighting {
     V3 sunDir = norm(V3(-0.62f, 0.5f, 0.6f));
-    V3 sunCol = V3(1.38f, 1.14f, 0.86f);
-    V3 skyTop = V3(0.3f, 0.48f, 0.76f), skyHorizon = V3(0.86f, 0.79f, 0.68f);
-    V3 groundCol = V3(0.36f, 0.32f, 0.28f), fogCol = V3(0.78f, 0.74f, 0.68f);
-    float fogDensity = 0.0042f;
+    V3 sunCol = V3(1.56f, 1.29f, 0.98f);
+    V3 skyTop = V3(0.28f, 0.46f, 0.76f), skyHorizon = V3(0.82f, 0.76f, 0.68f);
+    V3 groundCol = V3(0.24f, 0.22f, 0.20f), fogCol = V3(0.78f, 0.74f, 0.68f);
+    float fogDensity = 0.0040f;
 };
 static Lighting LIGHT;
 
@@ -4542,7 +4566,7 @@ static void streamDraw(GLuint vao, GLuint vbo, GLuint ebo, size_t& vcap, size_t&
 }
 
 static M4 lightMatrix(V3 focus) {
-    float R = 62.f;
+    float R = 52.f;
     V3 eye = focus + LIGHT.sunDir * 150.f;
     M4 view = mLookAt(eye, focus, V3(0, 1, 0));
     // snap to shadow texels to avoid shimmering
@@ -4987,7 +5011,7 @@ int main(int argc, char** argv) {
         RD.dynMesh.upload(DM, true);
 
         V3 focus = mode == GM_TITLE ? V3(14, 0, -26) : P.pos;
-        M4 lightVP = lightMatrix(focus + camFwd * 25.f);
+        M4 lightVP = lightMatrix(focus + camFwd * 20.f);
         // shadow pass
         gl.BindFramebuffer(GL_FRAMEBUFFER, RD.shadowFbo);
         glViewport(0, 0, RD.shadowRes, RD.shadowRes);
@@ -4996,7 +5020,7 @@ int main(int argc, char** argv) {
         glDisable(GL_BLEND);
         glDisable(GL_CULL_FACE);
         glEnable(GL_POLYGON_OFFSET_FILL);
-        glPolygonOffset(1.6f, 3.0f);
+        glPolygonOffset(0.9f, 1.5f);
         gl.UseProgram(RD.pShadow);
         setMat(RD.pShadow, "uLightVP", lightVP);
         RD.staticMesh.draw();
