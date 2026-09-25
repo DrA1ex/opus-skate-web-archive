@@ -74,6 +74,9 @@ async function dispatchPointer(page, selector, type, init) {
   }
 
   await desktop.screenshot({ path: 'runtime-smoke.png', fullPage: true });
+  await desktop.keyboard.press('Enter');
+  await desktop.waitForTimeout(1200);
+  await desktop.screenshot({ path: 'runtime-smoke-gameplay.png', fullPage: true });
 
   const mobileContext = await browser.newContext({
     viewport: { width: 844, height: 390 },
