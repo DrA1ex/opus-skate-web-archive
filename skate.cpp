@@ -625,7 +625,9 @@ void main(){
     // Fade brick-scale variation before it reaches the pixel-frequency range.
     // Keeping the old random per-brick colour at this scale caused the facade
     // to crawl even though the mortar edge itself was anti-aliased.
-    float detail = 1.0 - smoothstep(0.07, 0.24, pixelFootprint);
+    // Fade brick-level detail well before individual courses approach pixel size.
+    // The staggered rows otherwise collapse into diagonal moire on mid-distance facades.
+    float detail = 1.0 - smoothstep(0.025, 0.08, pixelFootprint);
 
     float mortarX = 1.0 - smoothstep(0.05 - fwb.x, 0.05 + fwb.x, bf.x);
     float mortarY = 1.0 - smoothstep(0.14 - fwb.y, 0.14 + fwb.y, bf.y);
