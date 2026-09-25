@@ -803,12 +803,7 @@ precision highp sampler2D;
 precision highp sampler2DShadow;
 in vec3 vPos; flat in int vMat;
 void main(){
-  if(vMat == 11){            // chain-link casts a diamond shadow
-    vec2 q = vec2(vPos.x + vPos.z, vPos.y) * 14.0;
-    vec2 r = vec2(q.x + q.y, q.x - q.y);
-    vec2 f = abs(fract(r) - 0.5);
-    if(min(f.x, f.y) > 0.09) discard;
-  }
+  if(vMat == 11) discard;    // sub-pixel chain-link shadows alias badly; posts/rails still cast shadows
   if(vMat == 7 && vPos.y > 30.0) discard;   // skyline lights
 }
 )";
