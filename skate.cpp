@@ -555,17 +555,24 @@ vec3 grade(vec3 c){
 static const char* WORLD_FS_MAIN = R"(
 in vec3 vPos; in vec3 vNrm; in vec3 vCol; flat in int vMat; in vec4 vLight; in float vClip;
 uniform sampler2DShadow uShadow; uniform float uShadowTexel;
+uniform mat4 uLightVP;
 out vec4 fragColor;
 
 float shadowAt(vec3 n){
-  vec3 p = vLight.xyz / vLight.w * 0.5 + 0.5;
+  // Offset the receiver in world space before projecting into the shadow map.
+  // A depth-only bias cannot robustly separate large facades from their own
+  // rasterized shadow at grazing sun angles, which caused the rectangular acne.
+  float vertical = 1.0 - smoothstep(0.25, 0.85, abs(n.y));
+  float receiverOffset = mix(0.004, 0.032, vertical);
+  vec4 lightPos = uLightVP * vec4(vPos + n * receiverOffset, 1.0);
+  vec3 p = lightPos.xyz / lightPos.w * 0.5 + 0.5;
   if(p.x<0.0||p.x>1.0||p.y<0.0||p.y>1.0||p.z>1.0) return 1.0;
 
-  // Keep the proven conservative receiver bias from the original renderer.
-  // The tighter bias used by the polishing pass made near-vertical facades
-  // compare against their own shadow-map depth and produced large acne blocks.
   float ndl = clamp(dot(n,uSunDir), 0.0, 1.0);
-  float bias = 0.00060 + 0.00160 * (1.0 - ndl);
+  float slope = sqrt(max(1.0 - ndl*ndl, 0.0)) / max(ndl, 0.22);
+  float baseBias = mix(0.00028, 0.00048, vertical);
+  float slopeScale = mix(0.00014, 0.00018, vertical);
+  float bias = baseBias + min(mix(0.00070, 0.00090, vertical), slope * slopeScale);
   float dist = length(vPos - uCamPos);
   float r = uShadowTexel * mix(1.15, 2.15, smoothstep(18.0, 85.0, dist));
 
@@ -805,7 +812,12 @@ precision highp sampler2D;
 precision highp sampler2DShadow;
 in vec3 vPos; flat in int vMat;
 void main(){
-  if(vMat == 11) discard;    // sub-pixel chain-link shadows alias badly; posts/rails still cast shadows
+  if(vMat == 11){            // chain-link casts a diamond shadow
+    vec2 q = vec2(vPos.x + vPos.z, vPos.y) * 14.0;
+    vec2 r = vec2(q.x + q.y, q.x - q.y);
+    vec2 f = abs(fract(r) - 0.5);
+    if(min(f.x, f.y) > 0.09) discard;
+  }
   if(vMat == 7 && vPos.y > 30.0) discard;   // skyline lights
 }
 )";
@@ -5272,7 +5284,7 @@ int main(int argc, char** argv) {
         glDisable(GL_BLEND);
         glDisable(GL_CULL_FACE);
         glEnable(GL_POLYGON_OFFSET_FILL);
-        glPolygonOffset(1.6f, 3.0f);
+        glPolygonOffset(1.1f, 2.0f);
         gl.UseProgram(RD.pShadow);
         setMat(RD.pShadow, "uLightVP", lightVP);
         RD.staticMesh.draw();
