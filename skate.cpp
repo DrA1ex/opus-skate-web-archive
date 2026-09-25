@@ -555,21 +555,24 @@ vec3 grade(vec3 c){
 static const char* WORLD_FS_MAIN = R"(
 in vec3 vPos; in vec3 vNrm; in vec3 vCol; flat in int vMat; in vec4 vLight; in float vClip;
 uniform sampler2DShadow uShadow; uniform float uShadowTexel;
+uniform mat4 uLightVP;
 out vec4 fragColor;
 
 float shadowAt(vec3 n){
-  vec3 p = vLight.xyz / vLight.w * 0.5 + 0.5;
+  // Offset the receiver in world space before projecting into the shadow map.
+  // A depth-only bias cannot robustly separate large facades from their own
+  // rasterized shadow at grazing sun angles, which caused the rectangular acne.
+  float vertical = 1.0 - smoothstep(0.25, 0.85, abs(n.y));
+  float receiverOffset = mix(0.004, 0.032, vertical);
+  vec4 lightPos = uLightVP * vec4(vPos + n * receiverOffset, 1.0);
+  vec3 p = lightPos.xyz / lightPos.w * 0.5 + 0.5;
   if(p.x<0.0||p.x>1.0||p.y<0.0||p.y>1.0||p.z>1.0) return 1.0;
 
-  // Keep a small receiver bias on horizontal surfaces for tight contact shadows,
-  // but use a larger bias on facades. Vertical walls are much more sensitive to
-  // shadow-map precision at grazing sun angles and otherwise develop acne.
   float ndl = clamp(dot(n,uSunDir), 0.0, 1.0);
-  float vertical = 1.0 - smoothstep(0.25, 0.85, abs(n.y));
   float slope = sqrt(max(1.0 - ndl*ndl, 0.0)) / max(ndl, 0.22);
-  float baseBias = mix(0.00036, 0.00092, vertical);
-  float slopeScale = mix(0.00018, 0.00034, vertical);
-  float bias = baseBias + min(mix(0.00095, 0.00145, vertical), slope * slopeScale);
+  float baseBias = mix(0.00028, 0.00048, vertical);
+  float slopeScale = mix(0.00014, 0.00018, vertical);
+  float bias = baseBias + min(mix(0.00070, 0.00090, vertical), slope * slopeScale);
   float dist = length(vPos - uCamPos);
   float r = uShadowTexel * mix(1.15, 2.15, smoothstep(18.0, 85.0, dist));
 
