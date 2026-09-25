@@ -624,18 +624,26 @@ void main(){
     b.x += mod(row, 2.0) * 0.5;
     vec2 bi = floor(b), bf = fract(b);
     vec2 fwb = max(fwidth(b), vec2(1e-4));
-    float detail = 1.0 - smoothstep(0.18, 0.52, max(fwb.x, fwb.y));
+    float pixelFootprint = max(fwb.x, fwb.y);
 
-    // Analytic AA for mortar edges. The old binary comparisons shimmered when
-    // individual bricks approached sub-pixel size on mobile.
+    // Fade brick-scale variation before it reaches the pixel-frequency range.
+    // Keeping the old random per-brick colour at this scale caused the facade
+    // to crawl even though the mortar edge itself was anti-aliased.
+    float detail = 1.0 - smoothstep(0.07, 0.24, pixelFootprint);
+
     float mortarX = 1.0 - smoothstep(0.05 - fwb.x, 0.05 + fwb.x, bf.x);
     float mortarY = 1.0 - smoothstep(0.14 - fwb.y, 0.14 + fwb.y, bf.y);
     float mortar = max(mortarX, mortarY) * detail;
 
     float v = hash12(bi);
-    base *= mix(0.97, 0.82 + 0.3*v, detail);
-    base = mix(base, vec3(0.62,0.6,0.56), 0.14 + mortar*0.71);
-    base *= 0.9 + 0.2*fbm(vPos.xz*0.35 + vPos.y*0.2);
+    float brickVariation = mix(0.96, 0.84 + 0.22*v, detail);
+    base *= brickVariation;
+    base = mix(base, vec3(0.62,0.6,0.56), 0.12 + mortar*0.72);
+
+    // Broad facade variation only; unlike per-brick noise this remains stable
+    // when the building occupies relatively few pixels.
+    float facadeNoise = fbm(fuv*0.18);
+    base *= 0.94 + 0.10*facadeNoise;
     if(m == 2){
       vec2 id, lc; float w = windowMask(fuv, 2.7, 3.3, 4.8, 1.25, 1.85, 0.75, id, lc);
       if(w > 1.5){ base = mix(vec3(0.85,0.83,0.78), vec3(0.18,0.2,0.22), step(0.5, hash12(id*3.1+7.0))); spec = 0.1; }
@@ -707,20 +715,16 @@ void main(){
     float wireDist = min(cell.x, cell.y);
     float fw = max(fwq.x, fwq.y);
 
-    // Stable analytic coverage instead of gl_FragCoord dithering. The previous
-    // screen-space hash changed every time the camera moved and produced shimmer.
-    float halfWidth = 0.085;
-    float coverage = 1.0 - smoothstep(halfWidth - fw*0.55, halfWidth + fw*0.55, wireDist);
+    // Analytic LOD: as the mesh becomes sub-pixel, widen the wire footprint
+    // instead of randomly discarding screen/world cells. This trades a little
+    // distant openness for a stable image with no temporal moire.
+    float halfWidth = max(0.085, fw * 0.34);
+    float aa = max(0.012, fw * 0.42);
+    float coverage = 1.0 - smoothstep(halfWidth - aa, halfWidth + aa, wireDist);
+    if(coverage < 0.30) discard;
 
-    // Once the mesh is too fine to resolve, switch to a stable world-cell pattern
-    // instead of temporal screen-space noise.
-    if(fw > 0.32){
-      vec2 cid = floor(r);
-      if(hash12(cid) > 0.38) discard;
-    } else if(coverage < 0.42) {
-      discard;
-    }
-    spec = 0.45; shin = 36.0;
+    base *= mix(0.86, 1.0, coverage);
+    spec = 0.32; shin = 30.0;
   } else if(m == 12){                                       // shop window glass
     vec3 R = reflect(-V, n);
     float fr = 0.25 + 0.75*pow(1.0 - max(dot(n, V), 0.0), 3.0);
