@@ -1644,7 +1644,7 @@ static int shopIdx = 0;
 // A row of buildings with storefronts. 'left' is the street-view left corner of the row at ground level,
 // 'out' the outward (street-facing) normal. Text reads left-to-right for someone on the sidewalk.
 static void facadeRow(V3 left, V3 out, float length, float depth, uint32_t seed, bool shops, float minH, float maxH,
-                      int styleMode, int firstRemoveFace = 0, int lastRemoveFace = 0) {
+                      int styleMode, int firstRemoveFace = 0, int lastRemoveFace = 0, bool buildShells = true) {
     V3 up(0, 1, 0), r = cross(up, out);
     Rng rng(seed);
     static const uint32_t bricks[] = {0x8e4a36, 0x7a3b2c, 0xa0664a, 0x9c7a5a, 0x6e4535, 0xb08560, 0x8a5a44, 0x5e3a2e};
@@ -1665,13 +1665,15 @@ static void facadeRow(V3 left, V3 out, float length, float depth, uint32_t seed,
         int wallFaces = 1 | 2 | 16 | 32;
         if (x < 0.001f) wallFaces &= ~firstRemoveFace;
         if (length - (x + w) < 0.5f) wallFaces &= ~lastRemoveFace;
-        building(mn.x, mn.z, mx.x, mx.z, h, style, col, rng.next(), true, wallFaces);
+        uint32_t buildingSeed = rng.next(); // consume even for decoration-only rows so storefront RNG stays stable
+        if (buildShells)
+            building(mn.x, mn.z, mx.x, mx.z, h, style, col, buildingSeed, true, wallFaces);
         if (shops) {
             int k = rng.irange(0, 7);
             storefront(p0 + out * FACADE_EPS, r, out, w, SHOP_NAMES[shopIdx++ % 28], hexc(signBg[k]), hexc(signFg[k]),
                        hexc(awn[rng.irange(0, 5)]), rng.chance(0.6f), rng);
         }
-        if (style == 0 && h > 12 && rng.chance(0.5f))
+        if (buildShells && style == 0 && h > 12 && rng.chance(0.5f))
             fireEscape(p0 + r * (w * 0.2f) + out * FACADE_EPS, r, out, w * 0.6f, (int)((h - 5.f) / 3.3f));
         x += w;
     }
@@ -2056,8 +2058,13 @@ static void brownstone(float z0, int i) {
 static void buildSE() {
     for (int i = 0; i < 7; i++) brownstone(30.f + i * 6.f, i);
     building(16, 72, 30, 200, 20, 0, hexc(0x6e4a3a), 70);
-    facadeRow(V3(16, 0, 12), V3(-1, 0, 0), 18, 14, 71, true, 12, 20, 0);
-    facadeRow(V3(30, 0, 12), V3(0, 0, -1), 14, 18, 72, true, 12, 20, 0);
+    // One physical corner building, decorated from two street sides. Previously
+    // both facade rows generated a full 16..30 x 12..30 building volume, so two
+    // independent sets of walls occupied the same depth and fought across the facade.
+    // Keep the avenue-facing row as the actual shell and make the cross-street row
+    // decoration-only. Drop the +Z end wall at z=30 where the brownstones begin.
+    facadeRow(V3(16, 0, 12), V3(-1, 0, 0), 18, 14, 71, true, 12, 20, 0, 0, 16, true);
+    facadeRow(V3(30, 0, 12), V3(0, 0, -1), 14, 18, 72, true, 12, 20, 0, 0, 0, false);
     building(30, 45, 200, 200, 32, 1, hexc(0xb8ae9c), 73);
     building(69.5f, 12, 200, 45, 26, 0, hexc(0x7a4b3c), 74);
     // construction site behind a plywood fence, sidewalk shed over the sidewalk
