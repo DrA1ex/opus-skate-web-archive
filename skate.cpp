@@ -589,6 +589,17 @@ vec3 detailNormal(vec3 n, float h, float strength){
   vec3 grad = side * (dFdx(h)*r1 + dFdy(h)*r2);
   return normalize(max(abs(det), 1e-5)*n - strength*grad);
 }
+float bayer4(vec2 p){
+  ivec2 q = ivec2(mod(floor(p), 4.0));
+  int i = q.x + q.y * 4;
+  const float m[16] = float[16](
+     0.0,  8.0,  2.0, 10.0,
+    12.0,  4.0, 14.0,  6.0,
+     3.0, 11.0,  1.0,  9.0,
+    15.0,  7.0, 13.0,  5.0
+  );
+  return (m[i] + 0.5) / 16.0;
+}
 // returns window mask (0 wall, 1 glass, 2 frame); id = unique window id
 float windowMask(vec2 uv, float cellW, float floorH, float y0, float winW, float winH, float sill, out vec2 id, out vec2 local){
   vec2 q = vec2(uv.x / cellW, (uv.y - y0) / floorH);
@@ -707,29 +718,21 @@ void main(){
   } else if(m == 11){                                       // chain-link fence (cutout)
     vec2 q = fuv * 14.0;
     vec2 r = vec2(q.x + q.y, q.x - q.y);
-    vec2 fwq = max(fwidth(r), vec2(1e-4));
-    vec2 cell = abs(fract(r) - 0.5);
-    float wireDist = min(cell.x, cell.y);
+    vec2 fwq = fwidth(r);
     float fw = max(fwq.x, fwq.y);
 
-    // Keep the physical wire width fixed. The previous LOD widened the wire with
-    // fwidth, so the fence converged toward an opaque sheet in the distance.
-    float halfWidth = 0.075;
-    float aa = clamp(fw * 0.30, 0.008, 0.055);
-    float coverage = 1.0 - smoothstep(halfWidth - aa, halfWidth + aa, wireDist);
-    if(coverage < 0.34) discard;
+    if(fw > 0.28){
+      // Match the transparent distant behaviour from main, but use an ordered
+      // 4x4 screen pattern instead of random hash noise. Roughly one third of
+      // fragments survive, so the fence remains visibly open instead of turning
+      // into a dark quad.
+      if(bayer4(gl_FragCoord.xy) > 0.34) discard;
+    } else {
+      vec2 f = abs(fract(r) - 0.5);
+      if(min(f.x, f.y) > 0.09) discard;
+    }
 
-    // Reduce wire density with distance instead of thickening it. The decision is
-    // tied to world-space mesh cells, so it remains stable while the camera moves.
-    float fenceDist = length(vPos - uCamPos);
-    float lod = smoothstep(14.0, 52.0, fenceDist);
-    vec2 wireCell = floor(r);
-    float keep = mix(1.0, 0.30, lod);
-    if(hash12(wireCell * 0.731 + vec2(19.7, 7.3)) > keep) discard;
-
-    base *= mix(0.94, 0.82, lod);
-    spec = mix(0.30, 0.16, lod);
-    shin = 28.0;
+    spec = 0.45; shin = 36.0;
   } else if(m == 12){                                       // shop window glass
     vec3 R = reflect(-V, n);
     float fr = 0.25 + 0.75*pow(1.0 - max(dot(n, V), 0.0), 3.0);
