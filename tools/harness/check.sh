@@ -30,8 +30,8 @@ done
 
 case "$mode" in
     fast) cxx_flags=(-O2) ;;
-    tsan) cxx_flags=(-O1 -g -fsanitize=thread) ;;
-    asan) cxx_flags=(-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer) ;;
+    tsan) cxx_flags=(-O1 -g -fsanitize=thread -DHARNESS_SANITIZED=1) ;;
+    asan) cxx_flags=(-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -DHARNESS_SANITIZED=1) ;;
 esac
 
 if [ "$mode" = tsan ]; then
