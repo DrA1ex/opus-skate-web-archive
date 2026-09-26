@@ -712,16 +712,24 @@ void main(){
     float wireDist = min(cell.x, cell.y);
     float fw = max(fwq.x, fwq.y);
 
-    // Analytic LOD: as the mesh becomes sub-pixel, widen the wire footprint
-    // instead of randomly discarding screen/world cells. This trades a little
-    // distant openness for a stable image with no temporal moire.
-    float halfWidth = max(0.085, fw * 0.34);
-    float aa = max(0.012, fw * 0.42);
+    // Keep the physical wire width fixed. The previous LOD widened the wire with
+    // fwidth, so the fence converged toward an opaque sheet in the distance.
+    float halfWidth = 0.075;
+    float aa = clamp(fw * 0.30, 0.008, 0.055);
     float coverage = 1.0 - smoothstep(halfWidth - aa, halfWidth + aa, wireDist);
-    if(coverage < 0.30) discard;
+    if(coverage < 0.34) discard;
 
-    base *= mix(0.86, 1.0, coverage);
-    spec = 0.32; shin = 30.0;
+    // Reduce wire density with distance instead of thickening it. The decision is
+    // tied to world-space mesh cells, so it remains stable while the camera moves.
+    float fenceDist = length(vPos - uCamPos);
+    float lod = smoothstep(14.0, 52.0, fenceDist);
+    vec2 wireCell = floor(r);
+    float keep = mix(1.0, 0.30, lod);
+    if(hash12(wireCell * 0.731 + vec2(19.7, 7.3)) > keep) discard;
+
+    base *= mix(0.94, 0.82, lod);
+    spec = mix(0.30, 0.16, lod);
+    shin = 28.0;
   } else if(m == 12){                                       // shop window glass
     vec3 R = reflect(-V, n);
     float fr = 0.25 + 0.75*pow(1.0 - max(dot(n, V), 0.0), 3.0);
