@@ -11,6 +11,7 @@ static float renderAudio(int frames, const AudioParams& params, bool withMusic, 
     for (auto& v : voices) { v.id = -1; v.pos = 0; }   // each render starts from silence
     aud = params;
     musicOn = withMusic;
+    publishAudio(aud, musicOn);
     std::vector<float> buf((size_t)frames * 2, 0.f);
     float peak = 0.f;
     for (int chunk = 0; chunk < frames; chunk += 1024) {
