@@ -14,8 +14,6 @@ while [ $# -gt 0 ]; do
         --slow)       runner_args+=(--slow); shift ;;
         --filter)     runner_args+=(--filter "$2"); shift 2 ;;
         --repeat)     runner_args+=(--repeat "$2"); shift 2 ;;
-        --no-bench)   runner_args+=(--no-bench); shift ;;
-        --bench-only) runner_args+=(--bench-only); shift ;;
         --verbose)    runner_args+=(--verbose); shift ;;
         --monkey)     runner_args+=(--monkey "$2"); shift 2 ;;
         --junit)      runner_args+=(--junit "$2"); shift 2 ;;
