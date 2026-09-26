@@ -7,7 +7,7 @@
 //  change in CI. See tools/harness/README.md.
 //
 //  Build and run (from the repository root):
-//    tools/harness/check.sh                # or: check.sh --slow --filter tricks
+//    tools/harness/check.sh                # or: check.sh --filter tricks
 //  Equivalent manual build:
 //    g++ -O2 -std=c++17 -Itools/harness/stub -Itools/harness -I. -o /tmp/opus-skate-harness tools/harness/runner.cpp
 // ============================================================================
@@ -42,7 +42,6 @@ static void usage() {
         "  --list                list every test and exit\n"
         "  --filter <substr>     only run tests whose suite.name contains <substr>\n"
         "  --repeat <n>          run the selection n times (regression / flake hunt)\n"
-        "  --slow                include the slow suites (letter reachability)\n"
         "  --junit <file>        write a JUnit XML report\n"
         "  --verbose             print every check, including the passing ones\n"
         "\n"
@@ -158,7 +157,6 @@ int main(int argc, char** argv) {
         if (a == "--list") o.listOnly = true;
         else if (a == "--filter") o.filter = next();
         else if (a == "--repeat") o.repeat = std::max(1, atoi(next().c_str()));
-        else if (a == "--slow") o.includeSlow = true;
         else if (a == "--junit") o.junit = next();
         else if (a == "--verbose") o.verbose = true;
         else if (a == "--monkey") o.monkeySeconds = atoi(next().c_str());
@@ -176,7 +174,6 @@ int main(int argc, char** argv) {
 
     std::vector<Case*> selected;
     for (Case& c : cases()) {
-        if (!o.includeSlow && c.slow) continue;
         if (!o.filter.empty() && fullName(c).find(o.filter) == std::string::npos) continue;
         selected.push_back(&c);
     }
@@ -186,14 +183,12 @@ int main(int argc, char** argv) {
             if (c->suite != suite) { suite = c->suite; printf("%s:\n", suite.c_str()); }
             printf("  %-44s%s\n", c->name.c_str(), c->slow ? "   [slow]" : "");
         }
-        printf("\n%zu tests (%zu hidden as slow; use --slow to include)\n", selected.size(),
-               (size_t)std::count_if(cases().begin(), cases().end(), [](const Case& c) { return c.slow; }));
+        printf("\n%zu tests\n", selected.size());
         return 0;
     }
 
     printf("OpusSkate web harness -- %zu tests selected", selected.size() * (size_t)o.repeat);
     if (!o.filter.empty()) printf(" (filter '%s')", o.filter.c_str());
-    if (!o.includeSlow) printf("  [slow suite hidden]");
     printf("\n\n");
 
     std::vector<Result> results;
