@@ -36,8 +36,6 @@ struct Options {
     uint32_t seed = 12345u;
     bool listOnly = false;
     bool includeSlow = false;
-    bool benchOnly = false;
-    bool noBench = false;
     bool verbose = false;
     bool dump = false;           // print level content and exit
 };
