@@ -1608,16 +1608,18 @@ static const float SH = 0.15f;   // sidewalk height
 static const float SURFACE_EPS = 0.012f;   // visual layers above coplanar ground surfaces
 static const float SURFACE_STEP = 0.008f;  // spacing between stacked paint / paving layers
 
-static void building(float x0, float z0, float x1, float z1, float h, int style, Col col, uint32_t seed, bool roofStuff = true) {
+static void building(float x0, float z0, float x1, float z1, float h, int style, Col col, uint32_t seed,
+                     bool roofStuff = true, int wallFaces = 1 | 2 | 16 | 32) {
     uint8_t mat = style == 1 ? MAT_STONEWIN : (style == 2 ? MAT_GLASSWALL : MAT_WINDOWS);
-    SM.boxAA(V3(x0, 0, z0), V3(x1, h, z1), col, mat, 1 | 2 | 16 | 32);
+    SM.boxAA(V3(x0, 0, z0), V3(x1, h, z1), col, mat, wallFaces);
     SM.quadN(V3(x0, h, z1), V3(x1, h, z1), V3(x1, h, z0), V3(x0, h, z0), V3(0, 1, 0), hexc(0x55514c), MAT_ROOF);
     world.addBox((x0 + x1) * 0.5f, (z0 + z1) * 0.5f, 0, (x1 - x0) * 0.5f, (z1 - z0) * 0.5f, 0, h, SURF_CONCRETE, true);
     Rng r(seed);
     if (style != 2) {
         Col cor = style == 1 ? shade(col, 0.85f) : hexc(0x6d665c);
-        SM.boxAA(V3(x0 - 0.35f, h - 0.15f, z0 - 0.35f), V3(x1 + 0.35f, h + 0.45f, z1 + 0.35f), cor, MAT_CONCRETE);
-        SM.boxAA(V3(x0 - 0.12f, 4.7f, z0 - 0.12f), V3(x1 + 0.12f, 4.95f, z1 + 0.12f), cor, MAT_CONCRETE);   // storefront cornice line
+        int trimFaces = wallFaces | 4 | 8;
+        SM.boxAA(V3(x0 - 0.35f, h - 0.15f, z0 - 0.35f), V3(x1 + 0.35f, h + 0.45f, z1 + 0.35f), cor, MAT_CONCRETE, trimFaces);
+        SM.boxAA(V3(x0 - 0.12f, 4.7f, z0 - 0.12f), V3(x1 + 0.12f, 4.95f, z1 + 0.12f), cor, MAT_CONCRETE, trimFaces);   // storefront cornice line
     } else {
         SM.boxAA(V3(x0 + 1, h, z0 + 1), V3(x1 - 1, h + 3, z1 - 1), hexc(0x5b6066), MAT_CONCRETE);
     }
@@ -1641,7 +1643,8 @@ static int shopIdx = 0;
 
 // A row of buildings with storefronts. 'left' is the street-view left corner of the row at ground level,
 // 'out' the outward (street-facing) normal. Text reads left-to-right for someone on the sidewalk.
-static void facadeRow(V3 left, V3 out, float length, float depth, uint32_t seed, bool shops, float minH, float maxH, int styleMode) {
+static void facadeRow(V3 left, V3 out, float length, float depth, uint32_t seed, bool shops, float minH, float maxH,
+                      int styleMode, int firstRemoveFace = 0, int lastRemoveFace = 0) {
     V3 up(0, 1, 0), r = cross(up, out);
     Rng rng(seed);
     static const uint32_t bricks[] = {0x8e4a36, 0x7a3b2c, 0xa0664a, 0x9c7a5a, 0x6e4535, 0xb08560, 0x8a5a44, 0x5e3a2e};
@@ -1659,7 +1662,10 @@ static void facadeRow(V3 left, V3 out, float length, float depth, uint32_t seed,
         int style = styleMode >= 0 ? styleMode : (rng.chance(0.72f) ? 0 : 1);
         Col col = style == 1 ? hexc(stones[rng.irange(0, 3)]) : hexc(bricks[rng.irange(0, 7)]);
         float h = 4.8f + 3.3f * rng.irange((int)((minH - 4.8f) / 3.3f), (int)((maxH - 4.8f) / 3.3f)) + 0.4f;
-        building(mn.x, mn.z, mx.x, mx.z, h, style, col, rng.next());
+        int wallFaces = 1 | 2 | 16 | 32;
+        if (x < 0.001f) wallFaces &= ~firstRemoveFace;
+        if (length - (x + w) < 0.5f) wallFaces &= ~lastRemoveFace;
+        building(mn.x, mn.z, mx.x, mx.z, h, style, col, rng.next(), true, wallFaces);
         if (shops) {
             int k = rng.irange(0, 7);
             storefront(p0 + out * FACADE_EPS, r, out, w, SHOP_NAMES[shopIdx++ % 28], hexc(signBg[k]), hexc(signFg[k]),
@@ -1751,11 +1757,14 @@ static void subwayEntrance(float cx, float cz) {
 static void buildNW() {
     V3 up(0, 1, 0);
     // avenue face (x=-14, faces +X), cross-street face (z=-12, faces +Z), Water St face (z=-57, faces -Z)
-    facadeRow(V3(-14, 0, -12), V3(1, 0, 0), 45, 16, 11, true, 12, 30, -1);
-    facadeRow(V3(-69.5f, 0, -12), V3(0, 0, 1), 55.5f, 16, 12, true, 12, 26, -1);
-    facadeRow(V3(-14, 0, -57), V3(0, 0, -1), 55.5f, 16, 13, true, 12, 24, -1);
+    // The three street rows overlap at the two corners. Keep the footprints (and
+    // storefront layout) unchanged, but omit the coplanar end walls that sit
+    // exactly on top of the neighbouring row's street-facing facade.
+    facadeRow(V3(-14, 0, -12), V3(1, 0, 0), 45, 16, 11, true, 12, 30, -1, 16, 32);
+    facadeRow(V3(-69.5f, 0, -12), V3(0, 0, 1), 55.5f, 16, 12, true, 12, 26, -1, 0, 1);
+    facadeRow(V3(-14, 0, -57), V3(0, 0, -1), 55.5f, 16, 13, true, 12, 24, -1, 1, 0);
     building(-200, -57, -69.5f, -12, 22, 0, hexc(0x7a4a3a), 14);
-    building(-70, -45, -26, -24, 14, 0, hexc(0x6a3a2e), 15, false);   // block interior filler
+    building(-69.5f, -41, -30, -28, 14, 0, hexc(0x6a3a2e), 15, false);   // interior filler; no facade overlap
     subwayEntrance(-11.4f, -30.5f);
     tree(-10.3f, -45, SH); tree(-10.3f, -18, SH); tree(-30, -8.1f, SH); tree(-52, -8.1f, SH);
     for (float z = -55; z < -10; z += 22) streetLamp(-9.7f, z, SH, PI / 2);
