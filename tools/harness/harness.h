@@ -35,7 +35,6 @@ struct Options {
     int monkeySeconds = 0;       // run the random-input monkey for N sim seconds
     uint32_t seed = 12345u;
     bool listOnly = false;
-    bool includeSlow = false;
     bool verbose = false;
     bool dump = false;           // print level content and exit
 };
